@@ -16,7 +16,7 @@ limitations under the License.
 
 import React from 'react';
 import styled from 'styled-components';
-import { ButtonPrimary } from 'design/Button';
+import { ButtonPrimary, Link } from 'design';
 import { Unlock } from 'design/Icon';
 import Flex from 'design/Flex';
 
@@ -31,6 +31,7 @@ export type Props = {
   children: React.ReactNode;
   noIcon?: boolean;
   event?: CtaEvent;
+  textLink?: boolean;
   [index: string]: any;
 };
 
@@ -38,6 +39,7 @@ export function ButtonLockedFeature({
   children,
   noIcon = false,
   event,
+  textLink = false,
   ...rest
 }: Props) {
   const ctx = useTeleport();
@@ -50,6 +52,19 @@ export function ButtonLockedFeature({
     if (isEnterprise) {
       userEventService.captureCtaEvent(event);
     }
+  }
+
+  if (textLink) {
+    return (
+      <Link
+        target="blank"
+        href={getSalesURL(version, isEnterprise, isUsageBased, event)}
+        onClick={handleClick}
+        {...rest}
+      >
+        {children}
+      </Link>
+    );
   }
 
   return (
