@@ -22,6 +22,68 @@ operator that have to accommodate for every subtle API and resource difference t
 
 ## Details
 
+### Project structure
+
+All protos are defined in the api module under the proto directory. When adding a new resource and gRPC API a new folder
+that matches the desired package name of the proto, generally a friendly name of the resource, should be created. Inside
+that a directory for each version of the API should exist. The actual RPC service should exist in its own file
+`foo_service.proto` which has the service defined first and all request/response messages defined after. This allows to
+quickly discover the API without having to scroll through a bunch of boilerplate and standard messages. Important types,
+like the resource definition, or any supporting types should exist in their own file. This makes discovering them easier
+and reduces the amount of things required to be imported.
+
+An example of the file layout for the resource used as an example in this RFD is included below.
+
+```bash
+api/proto
+├── README.md
+├── buf-legacy.yaml
+├── buf.lock
+├── buf.yaml
+└── teleport
+    ├── foo
+    │   └── v1
+    │       ├── foo.proto
+    │       └── foo_service.proto
+    ├── legacy
+    │   ├── client
+    │   │   └── proto
+    │   │     ├── authservice.proto
+    │   │     ├── certs.proto
+    │   │     ├── event.proto
+    │   │     ├── joinservice.proto
+    │   │     └── proxyservice.proto
+    │   └── types
+    │         ├── device.proto
+    │         ├── events
+    │         │    ├── athena.proto
+    │         │    └── events.proto
+    │         ├── types.proto
+    │         ├── webauthn
+    │         │    └── webauthn.proto
+    │         └── wrappers
+    │              └── wrappers.proto
+```
+
+The legacy directory contains resources and API definitions that were defined prior to our shift to user smaller,
+localized services per resource. Adding new resources and APIs to the giant monolithic `proto.AuthService` should be
+avoided if possible.
+
+### New resource checklist
+
+Use the non-exhaustive list below as a guide when adding a new resource. Further sections in the RFD dive into more
+detail about what is needed to complete a particular item.
+
+- [ ] Create proto spec for resource and RPC service
+- [ ] Create backend service
+- [ ] Add resource support to api client
+- [ ] Implement gRPC service
+- [ ] Add support for admin operations to tctl
+- [ ] Optional: Add resource to cache
+- [ ] Optional: Add support for bootstrapping the resource
+- [ ] Optional: Add support for resource to Teleport Operator
+- [ ] Optional: Add support for resource to Teleport Terraform Provider
+
 ### Defining a resource
 
 A resource at minimum MUST include a kind, version, `teleport.header.v1.Metadata` and a specification message with any
@@ -142,7 +204,7 @@ without requiring a call to `Get`. If `Upsert` is not consumed it may be omitted
 
 message UpsertFooRequest {
   // The full Foo resource to persist in the backend.
-  Foo foo = 2;
+  Foo foo = 1;
 }
 
 message UpsertFooResponse {
@@ -167,7 +229,7 @@ The request MUST fail and return a `trace.NotFound` error if there is no matchin
 message GetFooRequest {
   // A filter to match the Foo by. Some resource may require more parameters to match and
   // may not use the name at all.
-  string name = 1;
+  string foo_id = 1;
 }
 
 message GetFooResponse {
@@ -184,13 +246,12 @@ additional resources, the response MUST also include a token that indicates wher
 Most legacy APIs do not provide a paginated way to retrieve resources and instead offer some kind of `GetAllFoos` RPC
 which either returns all `Foo` in a single message or leverages a server side stream to send each `Foo` one at a time.
 Returning all items in a single message causes problems when the number of resources scales beyond gRPC message size
-limits. Due to caches making use of the `GetAll` RPC variants to populate themselves during initialization this can lead
-to permanently unhealthy caches constantly retrying to initialize which can lead to backend throttling and enough
-increased load on Auth to render the cluster unusable.
+limits. To provide parity with this legacy API if needed, a helper method should be implemented on the client which
+builds the entire resource set by repeatedly calling `List` until all pages have been consumed.
 
 ```protobuf
 // Returns a page of Foo and the token to find the next page of items.
-    rpc ListFoo(ListFooRequest) returns (ListFooResponse);
+    rpc ListFoos(ListFoosRequest) returns (ListFoosResponse);
 
 message ListFoosRequest {
   // The maximum number of items to return.
@@ -215,8 +276,8 @@ to be permanently unhealthy since it is never able to initialize loading the aff
 
 #### Delete
 
-The `Delete` RPC takes the parameters required to match a resource (usually the resource name should suffice), and
-removes the specified resource from the backend and returns a `google.protobuf.Empty`.
+The `Delete` RPC takes the parameters required to match a resource and performs a hard delete of the specified resource
+from the backend and returns a `google.protobuf.Empty`.
 
 The request MUST fail and return a `trace.NotFound` error if there is no matching resource in the backend.
 
@@ -227,7 +288,7 @@ The request MUST fail and return a `trace.NotFound` error if there is no matchin
 message DeleteFooRequest {
   // Name of the foo to remove. Some resource may require more parameters to match and
   // may not use the name at all.
-  string name = 1;
+  string foo_id = 1;
 }
 ```
 
@@ -237,6 +298,20 @@ A backend service to handle persisting and retrieving a resource from the backen
 `lib/services/local/foo.go`. An accompanying interface which mirrors the service is defined in `lib/services/foo.go`.
 Continuing on with the example above, the backend service for the `Foo` resource might look like the following.
 
+The sections below contain a reference example for how to interact with the backend to perform common operations on a
+resource. For most cases, when adding a new resource, it is preferred to create a service that wraps
+the [generic.Service](https://github.com/gravitational/teleport/blob/7f3c58df1fd675a813dc2992c10b2796b9b5c6bf/lib/services/local/generic/generic.go#L73-L81)
+over implementing everything from scratch. If custom behavior is required for a subset of backend operations, they may
+be implemented directly while all the other operations still make use of the generic service.
+
+#### Resource validation
+
+The strictest validation of a resource should be performed prior to write operations. Any resource persisted in the
+backend should be guaranteed to be valid. Read operations should not perform resource validations, doing so could
+prevent a resource being read if validations are modified to be more restrictive after a resource had already been
+written. This allows for resilient reads which ensure that any resource stored is always allowed to be retrieved from
+the backend.
+
 #### Create
 
 When creating a new resource, the `backend.Backend.Create` method should be used to persist the resource. It is also
@@ -244,24 +319,24 @@ imperative that the revision generated by the backend is set on the returned res
 
 ```go
 func (s *FooService) CreateFoo(ctx context.Context, foo *foov1.Foo) (*foov1.Foo, error) {
-    value, err := convertFooToValue(foo)
-    if err != nil {
-        return nil, trace.Wrap(err)
-    }
-    item := backend.Item{
-        Key:     backend.Key("foo", foo.GetName()),
-        Value:   value,
-        Expires: foo.Expiry(),
-    }
+	value, err := convertFooToValue(foo)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	item := backend.Item{
+		Key:     backend.Key("foo", foo.GetName()),
+		Value:   value,
+		Expires: foo.Expiry(),
+	}
 
-    lease, err := s.backend.Create(ctx, item)
-    if err != nil {
-        return nil, trace.Wrap(err)
-    }
+	lease, err := s.backend.Create(ctx, item)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
 
-    // Update the foo with the revision generated by the backend during the write operation.
-    foo.SetRevision(lease.Revision)
-    return foo, nil
+	// Update the foo with the revision generated by the backend during the write operation.
+	foo.GetMetadata().SetRevision(lease.Revision)
+	return foo, nil
 }
 ```
 
@@ -274,29 +349,29 @@ should also be preferred over traditional `CompareAndSwap` operations.
 
 ```go
 func (s *FooService) UpdateFoo(ctx context.Context, foo *foov1.Foo) (*foov1.Foo, error) {
-    // The revision is cached prior to converting to the value because 
-    // conversion functions may set the revision to "" if MarshalConfig.PreserveResourceID
-    // is not set.
-    rev := foo.GetRevision()
-    value, err := convertFooToValue(foo)
-    if err != nil {
-        return nil, trace.Wrap(err)
-    }
-    item := backend.Item{
-        Key:     backend.Key("foo", foo.GetName()),
-        Value:   value,
-        Expires: foo.Expiry(),
-        Revision: rev,
-    }
+	// The revision is cached prior to converting to the value because 
+	// conversion functions may set the revision to "" if MarshalConfig.PreserveResourceID
+	// is not set.
+	rev := foo.GetMetadata().GetRevision()
+	value, err := convertFooToValue(foo)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	item := backend.Item{
+		Key:     backend.Key("foo", foo.GetName()),
+		Value:   value,
+		Expires: foo.Expiry(),
+		Revision: rev,
+	}
 
-    lease, err := s.backend.ConditionalUpdate(ctx, item)
-    if err != nil {
-        return nil, trace.Wrap(err)
-    }
+	lease, err := s.backend.ConditionalUpdate(ctx, item)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
 
-    // Update the foo with the revision generated by the backend during the write operation.
-    foo.SetRevision(lease.Revision)
-    return foo, nil
+	// Update the foo with the revision generated by the backend during the write operation.
+	foo.GetMetadata().SetRevision(lease.Revision)
+	return foo, nil
 }
 ```
 
@@ -314,47 +389,49 @@ for an example.
 
 ```go
 func (s *FooService) UpsertFoo(ctx context.Context, foo *foov1.Foo) (*foov1.Foo, error) {
-    value, err := convertFooToValue(foo)
-    if err != nil {
-        return nil, trace.Wrap(err)
-    }
-    item := backend.Item{
-        Key:     backend.Key("foo", foo.GetName()),
-        Value:   value,
-        Expires: foo.Expiry(),
-    }
+	value, err := convertFooToValue(foo)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	item := backend.Item{
+		Key:     backend.Key("foo", foo.GetName()),
+		Value:   value,
+		Expires: foo.Expiry(),
+	}
 
-    lease, err := s.backend.Put(ctx, item)
-    if err != nil {
-        return nil, trace.Wrap(err)
-    }
+	lease, err := s.backend.Put(ctx, item)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
 
-    // Update the foo with the revision generated by the backend during the write operation.
-    foo.SetRevision(lease.Revision)
-    return foo, nil
+	// Update the foo with the revision generated by the backend during the write operation.
+	foo.GetMetadata().SetRevision(lease.Revision)
+	return foo, nil
 }
 ```
 
 #### Get
 
 To retrieve a resource the `backend.Backend.Get` method should be provided a key built from the match parameters of the
-request.
+request. Note the rewrapping of the `trace.NotFound` error below. This results in a much friendly error being provided
+to the user and prevents the backend key from leaking into other layers.
 
 ```go
-func (s *AccessService) GetFoo(ctx context.Context, name string) (*Foo, error) {
-    if name == "" {
-        return nil, trace.BadParameter("missing foo name")
-    }
+func (s *FooService) GetFoo(ctx context.Context, id string) (*Foo, error) {
+	if id == "" {
+		return nil, trace.BadParameter("missing foo id")
+	}
 
-    item, err := s.backend.Get(ctx, backend.Key("foo", name))
-    if err != nil {
-        if trace.IsNotFound(err) {
-            return nil, trace.NotFound("foo %v is not found", name)
-        }    
-        return nil, trace.Wrap(err)
-    }
-    foo, err := convertItemToFoo(item)
-    return foo, trace.Wrap(err)
+	item, err := s.backend.Get(ctx, backend.Key("foo", id))
+	if err != nil {
+		// Wrap the error to prevent leaking the backend key.
+		if trace.IsNotFound(err) {
+			return nil, trace.NotFound("foo %v is not found", id)
+		}
+		return nil, trace.Wrap(err)
+	}
+	foo, err := convertItemToFoo(item)
+	return foo, trace.Wrap(err)
 }
 ```
 
@@ -371,38 +448,38 @@ causes Teleport to be permanently unhealthy since it is never able to load or ca
 
 ```go
 func (s *FooService) ListFoos(ctx context.Context, pageSize int, pageToken string) ([]*foov1.Foo, string, error) {
-    rangeStart := backend.Key("foo", pageToken)
-    rangeEnd := backend.RangeEnd(backend.ExactKey("foo"))
+	rangeStart := backend.Key("foo", pageToken)
+	rangeEnd := backend.RangeEnd(backend.ExactKey("foo"))
 
-    // Adjust page size, so it can't be too large.
-    if pageSize <= 0 || pageSize > apidefaults.DefaultChunkSize {
-        pageSize = apidefaults.DefaultChunkSize
-    }
+	// Adjust page size, so it can't be too large.
+	if pageSize <= 0 || pageSize > apidefaults.DefaultChunkSize {
+		pageSize = apidefaults.DefaultChunkSize
+	}
 
-    // Increase the page size by one to detect if another page is available if
-    // a full page match is retrieved without having to fetch the next page.
-    pagSize++
+	// Increase the page size by one to detect if another page is available if
+	// a full page match is retrieved without having to fetch the next page.
+	pagSize++
 
-    fooStream := stream.MapWhile(
-        backend.StreamRange(ctx, s.backend, rangeStart, rangeEnd, limit),
-        func (item backend.Item) (types.User, bool) {
-            foo, err := convertItemToFoo(item)
+	fooStream := stream.MapWhile(
+		backend.StreamRange(ctx, s.backend, rangeStart, rangeEnd, limit),
+		func (item backend.Item) (types.User, bool) {
+			foo, err := convertItemToFoo(item)
 
-            // Warn if an item cannot be converted but don't prevent the entire page from being processed.
-            if err != nil {
-                s.log.Warnf("Skipping foo at %s because conversion from backend item failed: %v", item.Key, err)
-                return nil, true
-            }
-            return foo, true
-        })
+			// Warn if an item cannot be converted but don't prevent the entire page from being processed.
+			if err != nil {
+				s.log.Warnf("Skipping foo at %s because conversion from backend item failed: %v", item.Key, err)
+				return nil, true
+			}
+			return foo, true
+	})
 
-    foos, more := stream.Take(userStream, pageSize)
-    var nextToken string
-    if more && fooStream.Next() {    
-        nextToken = backend.NextPaginationKey(foos[len(foos)-1])
-    }
+	foos, more := stream.Take(userStream, pageSize)
+	var nextToken string
+	if more && fooStream.Next() {
+		nextToken = backend.NextPaginationKey(foos[len(foos)-1])
+	}
 
-    return foos, nextToken, trace.NewAggregate(err, fooStream.Done())
+	return foos, nextToken, trace.NewAggregate(err, fooStream.Done())
 }
 ```
 
@@ -411,9 +488,12 @@ func (s *FooService) ListFoos(ctx context.Context, pageSize int, pageToken strin
 One thing to consider when creating a resource is whether it will need to be cached. As mentioned above, any resource
 that is cached must have its backend layer implement the specific set of operations required by the cache collections
 [executor](https://github.com/gravitational/teleport/blob/004d0db0c1f6e9b312d0b0e1330b6e5bf1ffef6e/lib/cache/collections.go#L54-L76).
-To avoid including `Upsert` or `DeleteAll` in the gRPC API if they are only consumed by the cache is to define a local
-variant of the backend service similar to
-[`services.DynamicAccessExt`](https://github.com/gravitational/teleport/blob/004d0db0c1f6e9b312d0b0e1330b6e5bf1ffef6e/lib/services/access_request.go#L260-L278).
+While `Upsert` and `DeleteAll` semantics are required by the cache it is preferred that the two methods are not directly
+exposed in the gRPC API. Several existing resources include a `DeleteAll` purely for the cache that always returns a
+`trace.NotImplemented` error. To avoid exposing the methods in the gRPC API at all, a local variant of the backend
+service similar
+to [`services.DynamicAccessExt`](https://github.com/gravitational/teleport/blob/004d0db0c1f6e9b312d0b0e1330b6e5bf1ffef6e/lib/services/access_request.go#L260-L278)
+should be used.
 
 Not all resources need to be cached. If a resource is infrequently accessed outside the hot path, then adding it to the
 cache is probably not necessary. It is also discouraged to add a resource to the cache if it scales linearly with the
@@ -427,38 +507,58 @@ If the `Foo` resource was to be cached its executor would look similar to the fo
 type fooExecutor struct{}
 
 func (fooExecutor) getAll(ctx context.Context, cache *Cache, loadSecrets bool) ([]*foov1.Foo, error) {
-    var (
-        startKey string
-        allFoos []*foov1.Foo
-    )
-    for {
-        foos, nextKey, err := cache.Foo.ListFoos(ctx, 0, startKey, "")
-        if err != nil {
-            return nil, trace.Wrap(err)
-        }
+	var (
+		startKey string
+		allFoos []*foov1.Foo
+	)
+	for {
+		foos, nextKey, err := cache.Foo.ListFoos(ctx, 0, startKey, "")
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}		
 
-        allFoos = append(allFoos, foos...)
+		allFoos = append(allFoos, foos...)
 
-        if nextKey == "" {
-            break
-        }
-        startKey = nextKey
-    }
-    return allFoos, nil
+		if nextKey == "" {
+			break
+		}
+		startKey = nextKey
+	}
+	return allFoos, nil
 }
 
 func (fooExecutor) upsert(ctx context.Context, cache *Cache, resource foov1.Foo) error {
-    return cache.Foo.UpsertFoo(ctx, resource)
+	return cache.Foo.UpsertFoo(ctx, resource)
 }
 
 func (fooExecutor) deleteAll(ctx context.Context, cache *Cache) error {
-    return cache.FooLocal.DeleteAllFoos(ctx)
+	return cache.FooLocal.DeleteAllFoos(ctx)
 }
 
 func (fooExecutor) delete(ctx context.Context, cache *Cache, resource types.Resource) error {
-    return cache.Foo.DeleteFoo(ctx, &foov1.DeleteFoo{Name: resource.GetName()})
+	return cache.Foo.DeleteFoo(ctx, &foov1.DeleteFoo{Name: resource.GetName()})
 }
 ```
+
+### Bootstrap
+
+Teleport allows a fresh cluster to be created with a set of resources via the `--bootstrap` flag. This is primarily used
+when creating a new cluster from a backup of another, or migrating an existing cluster from one storage backend to
+another. Typically resources are retrieved from an existing cluster
+via `tctl get all --with-secrets > /some/path/to/resources/yaml` and then spawning a new instance of with the bootstrap
+flag: `teleport start --bootstrap=/some/path/to/resources/yaml`.
+
+For a resource to be supported it added to the list of items retrieved with `tctl get all` and to the auth
+initialization code responsible for parsing resources during
+the [bootstrap process](https://github.com/gravitational/teleport/blob/d0f2b4406bfacc895f796b665d07c5d740280e38/lib/auth/init.go#L321-L335).
+
+### Backward Compatibility
+
+Changing existing resources which do not follow the guidelines laid out in this RFD may lead to breaking changes. It is
+not recommended to change existing resources for change’s sake. Migrating APIs which do not conform to the
+recommendations in this RFD can be made in a backward compatible manner. This can be achieved by adding new APIs that
+conform with the advice above and falling back to the existing APIs if a `trace.NotImplemented` error is received. Once
+all compatible versions of Teleport are using the new version of the API, the old API may be cleaned up.
 
 ### Proto Specification
 
@@ -495,14 +595,28 @@ message FooSpec {
   int32 baz = 2;
   bool qux = 3;
 }
+```
+
+</details>
+
+<details open><summary>Foo Service</summary>
+
+```protobuf
+syntax = "proto3";
+
+package teleport.foo.v1;
+
+import "teleport/foo/v1/foo.proto";
+
+option go_package = "github.com/gravitational/teleport/api/gen/proto/go/teleport/foo/v1;foov1";
 
 // FooService provides an API to manage Foos.
 service FooService {
   // GetFoo returns the specified Foo resource.
   rpc GetFoo(GetFooRequest) returns (GetFooResponse);
 
-  // ListFoo returns a page of Foo resources.
-  rpc ListFoo(ListFooRequest) returns (ListFooResponse);
+  // ListFoos returns a page of Foo resources.
+  rpc ListFoos(ListFoosRequest) returns (ListFoosResponse);
 
   // CreateFoo creates a new Foo resource.
   rpc CreateFoo(CreateFooRequest) returns (CreateFooResponse);
@@ -513,14 +627,14 @@ service FooService {
   // UpsertFoo creates or updates a Foo resource.
   rpc UpsertFoo(UpsertFooRequest) returns (UpsertFooResponse);
 
-  // DeleteFoo removes the specified Foo resource.
+  // DeleteFoo hard deletes the specified Foo resource.
   rpc DeleteFoo(DeleteFooRequest) returns (google.protobuf.Empty);
 }
 
 // Request for GetFoo.
 message GetFooRequest {
-  // The name of the Foo resource to retrieve.
-  string name = 1;
+  // The id of the Foo resource to retrieve.
+  string foo_id = 1;
 }
 
 // Response for GetFoo.
@@ -567,7 +681,7 @@ message CreateFooResponse {
 // Request for UpdateFoo.
 message UpdateFooRequest {
   // The foo resource to update.
-  Foo foo = 2;
+  Foo foo = 1;
 
   // The update mask applied to a Foo.
   // Fields are masked according to their proto name.
@@ -595,16 +709,8 @@ message UpsertFooResponse {
 // Request for DeleteFoo.
 message DeleteFooRequest {
   // Name of the foo to remove.
-  string name = 1;
+  string foo_id = 1;
 }
 ```
 
 </details>
-
-### Backward Compatibility
-
-Changing existing resources which do not follow the guidelines laid out in this RFD may lead to breaking changes. It is
-not recommended to change existing resources for change’s sake. Migrating APIs which do not conform to the
-recommendations in this RFD can be made in a backward compatible manner. This can be achieved by adding new APIs that
-conform with the advice above and falling back to the existing APIs if a `trace.NotImplemented` error is received. Once
-all compatible versions of Teleport are using the new version of the API, the old API may be cleaned up.
