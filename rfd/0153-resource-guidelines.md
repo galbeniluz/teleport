@@ -349,7 +349,7 @@ should also be preferred over traditional `CompareAndSwap` operations.
 
 ```go
 func (s *FooService) UpdateFoo(ctx context.Context, foo *foov1.Foo) (*foov1.Foo, error) {
-	// The revision is cached prior to converting to the value because 
+	// The revision is cached prior to converting to the value because
 	// conversion functions may set the revision to "" if MarshalConfig.PreserveResourceID
 	// is not set.
 	rev := foo.GetMetadata().GetRevision()
@@ -495,13 +495,16 @@ service similar
 to [`services.DynamicAccessExt`](https://github.com/gravitational/teleport/blob/004d0db0c1f6e9b312d0b0e1330b6e5bf1ffef6e/lib/services/access_request.go#L260-L278)
 should be used.
 
-Not all resources need to be cached. If a resource is infrequently accessed outside the hot path, then adding it to the
-cache is probably not necessary. It is also discouraged to add a resource to the cache if it scales linearly with the
-size of the cluster. If a resource is to be cached, it must be added to the
-[Auth cache](https://github.com/gravitational/teleport/blob/004d0db0c1f6e9b312d0b0e1330b6e5bf1ffef6e/lib/cache/cache.go#L95-L154)
-and the cache of any service that requires it.
+Caching is most important for resources that are accessed frequently and in a "hot path" (i.e., during the process of
+performing normal day-to-day operations). For example, resources like cluster networking config, session recording
+config, CAs, roles, etc. which are retrieved per connection should be cached to reduce latency. Resources which are
+accessed infrequently, or which scale linearly with cluster size are good examples of resources that should NOT be
+cached.
 
-If the `Foo` resource was to be cached its executor would look similar to the following:
+If a resource is to be cached, it must be added to
+the[Auth cache](https://github.com/gravitational/teleport/blob/004d0db0c1f6e9b312d0b0e1330b6e5bf1ffef6e/lib/cache/cache.go#L95-L154)
+and the cache of any service that requires it. To add the `Foo` resource to the cached its executor would look similar
+to the following:
 
 ```go
 type fooExecutor struct{}
@@ -515,7 +518,7 @@ func (fooExecutor) getAll(ctx context.Context, cache *Cache, loadSecrets bool) (
 		foos, nextKey, err := cache.Foo.ListFoos(ctx, 0, startKey, "")
 		if err != nil {
 			return nil, trace.Wrap(err)
-		}		
+		}
 
 		allFoos = append(allFoos, foos...)
 
