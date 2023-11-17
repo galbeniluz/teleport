@@ -315,7 +315,6 @@ over implementing everything from scratch. If custom behavior is required for a 
 be implemented directly while all the other operations still make use of the generic service.
 
 #### Resource validation
-
 The strictest validation of a resource should be performed prior to write operations. Any resource persisted in the
 backend should be guaranteed to be valid. Read operations should not perform resource validations, doing so could
 prevent a resource being read if validations are modified to be more restrictive after a resource had already been
@@ -586,8 +585,6 @@ recommendations in this RFD can be made in a backward compatible manner. This ca
 conform with the advice above and falling back to the existing APIs if a `trace.NotImplemented` error is received. Once
 all compatible versions of Teleport are using the new version of the API, the old API may be cleaned up.
 
-
-### P
 
 ### Proto Specification
 
