@@ -76,9 +76,9 @@ detail about what is needed to complete a particular item.
 
 - [ ] Create proto spec for resource and RPC service
 - [ ] Create backend service
-- [ ] Add resource support to api client
+- [ ] Add resource client to `api` client
 - [ ] Implement gRPC service
-- [ ] Add support for admin operations to tctl
+- [ ] Add resource support to tctl (get, create, edit)
 - [ ] Optional: Add resource to cache
 - [ ] Optional: Add support for bootstrapping the resource
 - [ ] Optional: Add support for resource to Teleport Operator
@@ -540,6 +540,19 @@ func (fooExecutor) deleteAll(ctx context.Context, cache *Cache) error {
 
 func (fooExecutor) delete(ctx context.Context, cache *Cache, resource types.Resource) error {
 	return cache.Foo.DeleteFoo(ctx, &foov1.DeleteFoo{Name: resource.GetName()})
+}
+```
+
+### api client
+
+For users to interact with the new Foo RPC service the client in the `api`
+module needs to be updated to provide the functionality. To do so a new method
+should be added to `client.Client` that exposes the gRPC client for the service
+as shown below.
+
+```go
+func (c *Client) FooClient() foopb.FooServiceClient {
+ 	return foopb.NewFooServiceClient(c.conn)
 }
 ```
 
