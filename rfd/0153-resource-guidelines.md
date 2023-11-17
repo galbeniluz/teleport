@@ -131,6 +131,16 @@ returning them if a `with_sercrets` flag is provided cause a variety of problems
 error to accidentally include secrets when they should not have been. It would then be the responsibility of the caller
 to get both the base resource and the corresponding secret resource if required.
 
+There are many things to consider, and many ways to design a resource
+specification. To provide consistency and uniformity there are a few
+[standards](https://cloud.google.com/apis/design/standard_fields)
+and [design patterns](https://cloud.google.com/apis/design/design_patterns)
+that should be followed when possible. The most notable of the design patterns
+is
+[Bool vs. Enum vs. String](https://cloud.google.com/apis/design/design_patterns#bool_vs_enum_vs_string). There have been several occasions in the past where a particular field
+was not flexible enough which prevented behavior from being easily extended to
+support a new feature.
+
 ### API
 
 All APIs should follow the following conventions that are largely based on
@@ -575,6 +585,9 @@ not recommended to change existing resources for change’s sake. Migrating APIs
 recommendations in this RFD can be made in a backward compatible manner. This can be achieved by adding new APIs that
 conform with the advice above and falling back to the existing APIs if a `trace.NotImplemented` error is received. Once
 all compatible versions of Teleport are using the new version of the API, the old API may be cleaned up.
+
+
+### P
 
 ### Proto Specification
 
