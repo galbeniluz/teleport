@@ -35,6 +35,11 @@ export const Blank = () => (
           kind: 'blank',
           url: '',
           clusterId: 'one',
+          latency: {
+            client: 0,
+            server: 0,
+            total: 0,
+          },
         } as const
       }
     />

@@ -35,6 +35,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/gorilla/websocket"
 	"github.com/gravitational/trace"
+	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/ssh"
@@ -183,6 +184,8 @@ type TerminalHandlerConfig struct {
 	Tracker types.SessionTracker
 	// PresenceChecker used for presence checking.
 	PresenceChecker PresenceChecker
+	// Clock allows interaction with time.
+	Clock clockwork.Clock
 }
 
 func (t *TerminalHandlerConfig) CheckAndSetDefaults() error {
@@ -223,6 +226,10 @@ func (t *TerminalHandlerConfig) CheckAndSetDefaults() error {
 
 	if t.TracerProvider == nil {
 		t.TracerProvider = tracing.DefaultProvider()
+	}
+
+	if t.Clock == nil {
+		t.Clock = clockwork.NewRealClock()
 	}
 
 	t.tracer = t.TracerProvider.Tracer("webterminal")
@@ -291,6 +298,9 @@ type TerminalHandler struct {
 	// closedByClient indicates if the websocket connection was closed by the
 	// user (closing the browser tab, exiting the session, etc).
 	closedByClient atomic.Bool
+
+	// clock used to interact with time.
+	clock clockwork.Clock
 }
 
 // ServeHTTP builds a connection to the remote node and then pumps back two types of
@@ -384,11 +394,6 @@ func (t *TerminalHandler) Close() error {
 func (t *TerminalHandler) handler(ws *websocket.Conn, r *http.Request) {
 	defer ws.Close()
 
-	// Update the read deadline upon receiving a pong message.
-	ws.SetPongHandler(func(_ string) error {
-		return trace.Wrap(ws.SetReadDeadline(deadlineForInterval(t.keepAliveInterval)))
-	})
-
 	// Create a context for signaling when the terminal session is over and
 	// link it first with the trace context from the request context
 	tctx := oteltrace.ContextWithRemoteSpanContext(context.Background(), oteltrace.SpanContextFromContext(r.Context()))
@@ -421,15 +426,263 @@ func (t *TerminalHandler) handler(ws *websocket.Conn, r *http.Request) {
 		return trace.Wrap(t.Close())
 	})
 
-	// Start sending ping frames through websocket to client.
-	go startPingLoop(ctx, ws, t.keepAliveInterval, t.log, t.Close)
-
 	// Pump raw terminal in/out and audit events into the websocket.
 	go t.streamEvents(ctx, tc)
 
 	// Block until the terminal session is complete.
 	t.streamTerminal(ctx, tc)
 	t.log.Debug("Closing websocket stream")
+}
+
+// SSHSessionLatencyStats contain latency measurements for both
+// legs of an ssh connection established via the Web UI.
+type SSHSessionLatencyStats struct {
+	// WebSocket measures the round trip time for a ping/pong via the websocket
+	// established between the client and the Proxy.
+	WebSocket int64 `json:"ws"`
+	// SSH measures the round trip time for a keepalive@openssh.com request via the
+	// connection established between the Proxy and the target host.
+	SSH int64 `json:"ssh"`
+}
+
+// SSHSessionMonitor periodically measures the latency of ssh sessions established via
+// the Web UI. It also detects when a connection has been unhealthy as per the keep alive
+// interval and terminates the session if the web socket connection is no longer healthy.
+type SSHSessionMonitor struct {
+	stream            *WSStream
+	clt               *tracessh.Client
+	log               logrus.FieldLogger
+	clock             clockwork.Clock
+	keepAliveInterval time.Duration
+	reportingInterval time.Duration
+	pingInterval      time.Duration
+	pong              chan string
+	onClose           func() error
+
+	mu    sync.Mutex
+	stats SSHSessionLatencyStats
+}
+
+// SSHSessionMonitorConfig provides required dependencies for the SSHSessionMonitor.
+type SSHSessionMonitorConfig struct {
+	// WSStream is the web socket client of the connection.
+	WSStream *WSStream
+	// SSHClient is the ssh client to the target host.
+	SSHClient *tracessh.Client
+	// Clock used to measure time.
+	Clock clockwork.Clock
+	// KeepAliveInterval how often to check that the connection is still alive.
+	KeepAliveInterval time.Duration
+	// PingInterval is the frequency at which both legs of the connection are pinged for
+	// latency calculations.
+	PingInterval time.Duration
+	// ReportInterval is the frequency at which the latency information is sent to the UI.
+	ReportInterval time.Duration
+	// OnClose is called when the connection is unhealthy.
+	OnClose func() error
+}
+
+// CheckAndSetDefaults ensures required fields are provided and sets
+// default values for any omitted optional fields.
+func (c *SSHSessionMonitorConfig) CheckAndSetDefaults() error {
+	if c.WSStream == nil {
+		return trace.BadParameter("ws stream not provided to SSHSessionMonitorConfig")
+	}
+
+	if c.SSHClient == nil {
+		return trace.BadParameter("ssh client not provided to SSHSessionMonitorConfig")
+	}
+
+	if c.KeepAliveInterval == 0 {
+		return trace.BadParameter("keep alive interval not provided to SSHSessionMonitorConfig")
+	}
+
+	if c.PingInterval <= 0 {
+		c.PingInterval = 2 * time.Second
+	}
+
+	if c.ReportInterval <= 0 {
+		c.ReportInterval = 3 * time.Second
+	}
+
+	if c.Clock == nil {
+		c.Clock = clockwork.NewRealClock()
+	}
+
+	if c.OnClose == nil {
+		c.OnClose = func() error { return nil }
+	}
+
+	return nil
+}
+
+// NewSSHSessionMonitor creates a new and unstarted session monitor. Run
+// should be called to begin monitoring the session.
+func NewSSHSessionMonitor(cfg SSHSessionMonitorConfig) (*SSHSessionMonitor, error) {
+	if err := cfg.CheckAndSetDefaults(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	monitor := SSHSessionMonitor{
+		stream:            cfg.WSStream,
+		clt:               cfg.SSHClient,
+		log:               cfg.WSStream.log,
+		clock:             cfg.Clock,
+		keepAliveInterval: cfg.KeepAliveInterval,
+		reportingInterval: cfg.ReportInterval,
+		pingInterval:      cfg.PingInterval,
+		onClose:           cfg.OnClose,
+		pong:              make(chan string, 1),
+	}
+
+	// Update the read deadline upon receiving a pong message.
+	monitor.stream.ws.SetPongHandler(func(payload string) error {
+		select {
+		case monitor.pong <- payload:
+		default:
+		}
+		return trace.Wrap(monitor.stream.ws.SetReadDeadline(deadlineForInterval(monitor.keepAliveInterval)))
+	})
+
+	return &monitor, nil
+}
+
+// GetStats returns a copy of the last known latency measurements.
+func (m *SSHSessionMonitor) GetStats() SSHSessionLatencyStats {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return SSHSessionLatencyStats{
+		SSH:       m.stats.SSH,
+		WebSocket: m.stats.WebSocket,
+	}
+}
+
+// Run starts measuring latency on both legs of the connection and
+// periodically providing the values to the UI. It will block until
+// the provided [context.Context] is canceled.
+func (m *SSHSessionMonitor) Run(ctx context.Context) {
+	go m.pingLoop(ctx)
+	go m.keepAliveLoop(ctx)
+
+	reportTicker := m.clock.NewTicker(m.reportingInterval)
+	defer reportTicker.Stop()
+
+	for {
+		select {
+		case <-reportTicker.Chan():
+			if err := m.stream.writeLatency(m.GetStats()); err != nil {
+				m.log.WithError(err).Warn("failed to report latency stats")
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (m *SSHSessionMonitor) updateWebSocketLatency(latency int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.stats.WebSocket = latency
+}
+
+func (m *SSHSessionMonitor) updateSSHLatency(latency int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.stats.SSH = latency
+}
+
+func (m *SSHSessionMonitor) sendWSPing() error {
+	return trace.Wrap(
+		m.stream.ws.WriteControl(
+			websocket.PingMessage,
+			[]byte(strconv.FormatInt(m.clock.Now().UnixNano(), 10)),
+			m.clock.Now().Add(2*time.Second),
+		),
+	)
+}
+
+// pingLoop periodically sends ping messages to the other side of the web socket
+// connection. The latency of the connection is measured by how long it takes for
+// a pong messages to be received. The pong message echoing the payload of the ping
+// message is relied on to determine the round trip time.
+func (m *SSHSessionMonitor) pingLoop(ctx context.Context) {
+	pingInterval := m.pingInterval
+	if m.keepAliveInterval <= pingInterval {
+		pingInterval = m.keepAliveInterval / 2
+	}
+
+	pingTicker := m.clock.NewTicker(pingInterval)
+	defer pingTicker.Stop()
+
+	var lastSuccessfulPing time.Time
+	if err := m.sendWSPing(); err != nil {
+		m.log.WithError(err).Warn("failed sending web socket ping for latency measurement")
+	} else {
+		lastSuccessfulPing = m.clock.Now()
+	}
+
+	lastKeepAliveCheck := m.clock.Now()
+	for {
+		select {
+		case payload := <-m.pong:
+			now := m.clock.Now()
+			nanos, err := strconv.ParseInt(payload, 10, 64)
+			if err != nil {
+				m.log.WithError(err).Warn("received unexpected payload in pong response")
+				return
+			}
+
+			then := time.Unix(0, nanos)
+
+			m.updateWebSocketLatency(now.Sub(then).Milliseconds())
+		case t := <-pingTicker.Chan():
+			if err := m.sendWSPing(); err != nil {
+				m.log.WithError(err).Warn("failed sending web socket ping for latency measurement")
+			} else {
+				lastSuccessfulPing = m.clock.Now()
+			}
+
+			if lastKeepAliveCheck.Add(m.keepAliveInterval).After(t) {
+				lastKeepAliveCheck = t
+				if lastSuccessfulPing.Add(m.keepAliveInterval).Before(m.clock.Now()) {
+					m.log.Debug("keep alive period exceeded without a successful ping - closing web socket")
+					if err := m.onClose(); err != nil && !utils.IsOKNetworkError(err) {
+						log.WithError(err).Error("close handler failed")
+					}
+					return
+				}
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// keepAliveLoop periodically sends a keepalive@openssh.com message via the SSH
+// client to the host. Latency is measured by how long it takes for the other side
+// to receive, process and reply.
+func (m *SSHSessionMonitor) keepAliveLoop(ctx context.Context) {
+	keepAliveInterval := m.pingInterval
+	tickerCh := m.clock.NewTicker(keepAliveInterval)
+	defer tickerCh.Stop()
+
+	for {
+		then := m.clock.Now()
+		if _, _, err := m.clt.SendRequest(ctx, teleport.KeepAliveReqType, true, nil); err != nil {
+			m.log.WithError(err).Warn("failed sending ssh keep alive for latency measurement")
+		} else {
+			m.updateSSHLatency(m.clock.Now().Sub(then).Milliseconds())
+		}
+
+		select {
+		case <-tickerCh.Chan():
+		case <-ctx.Done():
+			log.Debug("Terminating ssh keep alive loop.")
+			return
+		}
+	}
 }
 
 type stderrWriter struct {
@@ -710,6 +963,20 @@ func (t *TerminalHandler) streamTerminal(ctx context.Context, tc *client.Telepor
 			}
 		}
 	}
+
+	monitor, err := NewSSHSessionMonitor(SSHSessionMonitorConfig{
+		WSStream:          t.stream.WSStream,
+		SSHClient:         nc.Client,
+		Clock:             t.clock,
+		KeepAliveInterval: t.keepAliveInterval,
+		OnClose:           t.Close,
+	})
+	if err != nil {
+		t.log.WithError(err).Warn("Unable to stream terminal - failure connecting to create connection monitor")
+		t.stream.writeError(err.Error())
+		return
+	}
+	go monitor.Run(ctx)
 
 	// Establish SSH connection to the server. This function will block until
 	// either an error occurs or it completes successfully.
@@ -1210,6 +1477,34 @@ func (t *WSStream) writeAuditEvent(event []byte) error {
 	envelope := &Envelope{
 		Version: defaults.WebsocketVersion,
 		Type:    defaults.WebsocketAudit,
+		Payload: encodedPayload,
+	}
+
+	envelopeBytes, err := proto.Marshal(envelope)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	// Send bytes over the websocket to the web client.
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return trace.Wrap(t.ws.WriteMessage(websocket.BinaryMessage, envelopeBytes))
+}
+
+func (t *WSStream) writeLatency(latency SSHSessionLatencyStats) error {
+	data, err := json.Marshal(latency)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	encodedPayload, err := t.encoder.String(string(data))
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	envelope := &Envelope{
+		Version: defaults.WebsocketVersion,
+		Type:    defaults.WebsocketLatency,
 		Payload: encodedPayload,
 	}
 

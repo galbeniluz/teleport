@@ -25,6 +25,11 @@ interface DocumentBase {
   url: string;
   kind: 'terminal' | 'nodes' | 'blank';
   created: Date;
+  latency: {
+    client: number;
+    server: number;
+    total: number;
+  };
 }
 
 export interface DocumentBlank extends DocumentBase {

@@ -108,7 +108,14 @@ export default function Console() {
               disableNew={disableNewTab}
               onNew={onTabNew}
             />
-            <ActionBar onLogout={onLogout} />
+            <ActionBar
+              onLogout={onLogout}
+              latency={{
+                client: activeDoc?.latency?.client ?? 0,
+                server: activeDoc?.latency?.server ?? 0,
+                total: activeDoc?.latency?.total ?? 0,
+              }}
+            />
           </Flex>
           {$docs}
           {hasSshSessions && (

@@ -39,6 +39,8 @@ import { useTeleport } from 'teleport';
 
 import { useConsoleContext } from 'teleport/Console/consoleContextProvider';
 
+import useLatency from 'teleport/lib/useLatency';
+
 import Document from '../Document';
 
 import { Terminal, TerminalRef } from './Terminal';
@@ -63,6 +65,7 @@ function DocumentSsh({ doc, visible }: PropTypes) {
   const terminalRef = useRef<TerminalRef>();
   const { tty, status, closeDocument, session } = useSshSession(doc);
   const webauthn = useWebAuthn(tty);
+  useLatency(tty, doc.id);
   const {
     getMfaResponseAttempt,
     getDownloader,

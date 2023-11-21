@@ -60,6 +60,7 @@ export default class ConsoleContext {
       url: cfg.getConsoleRoute(cfg.proxyCluster),
       clusterId: cfg.proxyCluster,
       created: new Date(),
+      latency: { client: 0, server: 0, total: 0 },
     });
   }
 
@@ -95,6 +96,7 @@ export default class ConsoleContext {
       kind: 'nodes',
       url: cfg.getConsoleNodesRoute(clusterId),
       created: new Date(),
+      latency: { client: 0, server: 0, total: 0 },
     });
   }
 
@@ -119,6 +121,7 @@ export default class ConsoleContext {
       url,
       mode,
       created: new Date(),
+      latency: { client: 0, server: 0, total: 0 },
     });
   }
 
