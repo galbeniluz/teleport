@@ -25,14 +25,12 @@ import * as Icons from 'design/Icon';
 import { Flex, ButtonPrimary, Text } from 'design';
 import { TeleportGearIcon } from 'design/SVGIcon';
 
-import PropTypes from 'prop-types';
-
 import cfg from 'teleport/config';
 
 export default function ActionBar(props: Props) {
   return (
     <Flex alignItems="center">
-      <LatencyMenuItem latency={props.latency} />
+      <LatencyDiagnostic latency={props.latency} />
       <MenuIcon
         buttonIconProps={{ mr: 2, ml: 2, size: 0, style: { fontSize: '16px' } }}
         menuProps={menuProps}
@@ -51,19 +49,19 @@ export default function ActionBar(props: Props) {
   );
 }
 
-function LatencyMenuItem({ latency }: PropTypes) {
-  function colorForLatency(l: number): string {
-    if (l > 400) {
-      return 'dataVisualisation.tertiary.abbey';
-    }
-
-    if (l > 150) {
-      return 'dataVisualisation.tertiary.sunflower';
-    }
-
-    return 'dataVisualisation.tertiary.caribbean';
+function colorForLatency(l: number): string {
+  if (l > 400) {
+    return 'dataVisualisation.tertiary.abbey';
   }
 
+  if (l > 150) {
+    return 'dataVisualisation.tertiary.sunflower';
+  }
+
+  return 'dataVisualisation.tertiary.caribbean';
+}
+
+function LatencyDiagnostic({ latency }: LatencyDiagnosticProps) {
   const totalColor = colorForLatency(latency.total);
   const clientColor = colorForLatency(latency.client);
   const serverColor = colorForLatency(latency.server);
@@ -85,7 +83,7 @@ function LatencyMenuItem({ latency }: PropTypes) {
             <Flex mr={2} gap={1} flexDirection="column" alignItems="center">
               <Flex mr={2} gap={1} flexDirection="row" alignItems="center">
                 <Icons.ChevronLeft size="medium" />
-                <Line></Line>
+                <Line />
                 <Icons.ChevronRight size="medium" />
               </Flex>
               <Text color={clientColor}>{latency.client}ms</Text>
@@ -99,7 +97,7 @@ function LatencyMenuItem({ latency }: PropTypes) {
             <Flex mr={2} gap={1} flexDirection="column" alignItems="center">
               <Flex mr={2} gap={1} flexDirection="row" alignItems="center">
                 <Icons.ChevronLeft size="medium" />
-                <Line></Line>
+                <Line />
                 <Icons.ChevronRight size="medium" />
               </Flex>
               <Text color={serverColor}>{latency.server}ms</Text>
@@ -124,7 +122,7 @@ function LatencyMenuItem({ latency }: PropTypes) {
 
 const Container = styled.div`
   background: ${props => props.theme.colors.levels.surface};
-  padding: 24px;
+  padding: ${props => props.theme.space[4]}px;
   width: 370px;
   height: 164px;
 `;
@@ -134,13 +132,13 @@ const Line = styled.div`
   width: 55px;
 `;
 
-interface PropTypes {
+type LatencyDiagnosticProps = {
   latency: {
     client: number;
     server: number;
     total: number;
   };
-}
+};
 
 type Props = {
   onLogout: VoidFunction;
