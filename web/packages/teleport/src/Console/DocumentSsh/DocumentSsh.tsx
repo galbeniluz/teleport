@@ -63,7 +63,6 @@ function DocumentSsh({ doc, visible }: PropTypes) {
   const terminalRef = useRef<TerminalRef>();
   const { tty, status, closeDocument, session } = useSshSession(doc);
   const webauthn = useWebAuthn(tty);
-
   const {
     getMfaResponseAttempt,
     getDownloader,

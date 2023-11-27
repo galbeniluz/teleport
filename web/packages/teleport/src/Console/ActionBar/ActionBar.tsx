@@ -20,14 +20,15 @@ import React from 'react';
 
 import { NavLink } from 'react-router-dom';
 import { MenuIcon, MenuItem, MenuItemIcon } from 'shared/components/MenuAction';
-import * as Icons from 'design/Icon';
-import { Flex, ButtonPrimary, Text } from 'design';
-
-import cfg from 'teleport/config';
 import {
   LatencyDiagnostic,
   LatencyDiagnosticProps,
 } from 'shared/components/LatencyDiagnostic';
+
+import * as Icons from 'design/Icon';
+import { Flex, ButtonPrimary } from 'design';
+
+import cfg from 'teleport/config';
 
 export default function ActionBar(props: Props) {
   return (

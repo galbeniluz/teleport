@@ -15,12 +15,13 @@
  */
 
 import styled from 'styled-components';
+import React from 'react';
 
-import { MenuIcon } from 'shared/components/MenuAction';
 import * as Icons from 'design/Icon';
 import { Flex, Text } from 'design';
 import { TeleportGearIcon } from 'design/SVGIcon';
-import React from 'react';
+
+import { MenuIcon } from 'shared/components/MenuAction';
 
 function colorForLatency(l: number): string {
   if (l > 400) {
