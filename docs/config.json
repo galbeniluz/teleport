@@ -1586,6 +1586,10 @@
           "forScopes": ["oss", "enterprise"]
         },
         {
+          "title": "Storage Backends",
+          "slug": "/reference/join-methods/"
+        },
+        {
           "title": "Networking",
           "slug": "/reference/networking/"
         },
