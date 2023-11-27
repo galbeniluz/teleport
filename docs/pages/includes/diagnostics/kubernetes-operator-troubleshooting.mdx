@@ -9,7 +9,7 @@ If an error happens and the reconciliation loop is not successful, an item in
 errors by inspecting Kubernetes resources with `kubectl`:
 
 ```code
-$ kubectl get teleportusers myuser -o yaml
+$ kubectl describe teleportusers myuser
 ```
 
 For example, if a user has been granted a nonexistent role the status will look like:
@@ -54,3 +54,7 @@ $ kubectl logs deploy/<OPERATOR_DEPLOYMENT_NAME>
   To diagnose reconciliation issues, you will have to inspect all pods to find
   the one reconciling the resources.
 </Admonition>
+
+If the Kubernetes resource has no status update and the operator does not produce
+any logs regarding the resource, please check if the resource lives in the same
+namespace as the operator.  The operator only watches for resource in its own namespace.
