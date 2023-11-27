@@ -249,7 +249,7 @@ func TestSSHSessionMonitor(t *testing.T) {
 	var missed int
 	for i := 0; i < 100; i++ {
 		// Advance the clock to initiate ssh keepalive messages and websocket pings
-		clock.BlockUntil(3)
+		clock.BlockUntil(1)
 		clock.Advance(3 * time.Second)
 
 		// Wait for a response to be sent
@@ -263,7 +263,7 @@ func TestSSHSessionMonitor(t *testing.T) {
 		}
 
 		// Advance the clock to initiate sending the latency statistics
-		clock.BlockUntil(3)
+		clock.BlockUntil(1)
 		clock.Advance(1 * time.Second)
 
 		// Wait for the latency measurement to be received. In the event,
