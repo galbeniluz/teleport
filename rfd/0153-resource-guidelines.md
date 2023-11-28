@@ -24,13 +24,7 @@ operator that have to accommodate for every subtle API and resource difference t
 
 ### Project structure
 
-All protos are defined in the api module under the proto directory. When adding a new resource and gRPC API a new folder
-that matches the desired package name of the proto, generally a friendly name of the resource, should be created. Inside
-that a directory for each version of the API should exist. The actual RPC service should exist in its own file
-`foo_service.proto` which has the service defined first and all request/response messages defined after. This allows to
-quickly discover the API without having to scroll through a bunch of boilerplate and standard messages. Important types,
-like the resource definition, or any supporting types should exist in their own file. This makes discovering them easier
-and reduces the amount of things required to be imported.
+All protos are defined in the `api` module under the proto directory. When adding a new resource and gRPC API a new folder that matches the desired package name of the proto should be created, which should be the domain that represents that resource and any other associated resources. Inside it, there should be a directory for each version of the API should exist. The actual RPC service should exist in its own file `foo_service.proto` which has the service defined first and all request/response messages defined after. This allows to quickly discover the API without having to scroll through a bunch of boilerplate and standard messages. Important types, like the resource definition, or any supporting types should exist in their own file. This makes discovering them easier and reduces the amount of things required to be imported.
 
 An example of the file layout for the resource used as an example in this RFD is included below.
 
@@ -90,7 +84,7 @@ A resource at minimum MUST include a kind, version, `teleport.header.v1.Metadata
 additional parameters needed to represent the resource. While the kind and version may seem like they would be easy to
 derive from the message definition itself, they need to be defined so that anything processing a generic resource can
 identify which resource is being processed. For example, `tctl` interacts with resources in their in raw yaml text form
-and leverage `services.UnknownResource` to identify the resource and act appropriately.
+and leverages `services.UnknownResource` to identify the resource and act appropriately.
 
 ```protobuf
 import "teleport/header/v1/resourceheader.proto";
@@ -99,17 +93,18 @@ import "teleport/header/v1/resourceheader.proto";
 message Foo {
   // The kind of resource represented.
   string kind = 1;
-  // An optional subkind to differentiate variations of the same kind.
+  // Differentiates variations of the same kind. All resources should
+  // contain one, even if it is never populated.
   string sub_kind = 2;
   // The version of the resource being represented.
   string version = 3;
-  // Common metadata that all resources shared.
+  // Common metadata that all resources share.
   teleport.header.v1.Metadata metadata = 4;
-  // The resource specific specification.
+  // The specific properties of a Foo.
   FooSpec spec = 5;
 }
 
-// FooSpec contains resource specific properties.
+// FooSpec contains specific properties of a Foo.
 message FooSpec {
   string bar = 1;
   int32 baz = 2;
@@ -127,7 +122,7 @@ get around this, the required fields from the header MUST be included in the mes
 
 If a resource has associated secrets (password, private key, jwt, mfa device, etc.) they should be defined in a separate
 resource and stored in a separate key range in the backend. The traditional pattern of defining secrets inline and only
-returning them if a `with_sercrets` flag is provided cause a variety of problems and introduce opportunity for human
+returning them if a `with_sercrets` flag is provided causes a variety of problems and introduces opportunity for human
 error to accidentally include secrets when they should not have been. It would then be the responsibility of the caller
 to get both the base resource and the corresponding secret resource if required.
 
@@ -143,7 +138,7 @@ support a new feature.
 
 ### API
 
-All APIs should follow the following conventions that are largely based on
+All APIs should follow the conventions listed below that are largely based on
 the [Google API style guide](https://cloud.google.com/apis/design/standard_methods).
 
 #### Create
@@ -175,7 +170,7 @@ message CreateFooResponse {
 The `Update` RPC takes a resource to be updated and must also return the updated resource so that any fields that are
 populated server side are provided to clients without requiring an additional call to `Get`. If partial updates of a
 resource are desired, the request may contain
-a [FieldMask](https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#fieldmask).
+a [FieldMask](https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#field-mask).
 
 The request MUST fail and return a `trace.NotFound` error if there is no matching resource in the backend.
 
@@ -209,7 +204,7 @@ without requiring a call to `Get`. If `Upsert` is not consumed it may be omitted
 `Update`.
 
 ```protobuf
-// Creates a new Foo or updates an existing Foo in the backend.
+// Creates a new Foo or replaces an existing Foo in the backend.
     rpc UpsertFoo(UpsertFooRequest) returns (UpsertFooResponse);
 
 message UpsertFooRequest {
@@ -306,9 +301,9 @@ message DeleteFooRequest {
 
 A backend service to handle persisting and retrieving a resource from the backend is typically defined in
 `lib/services/local/foo.go`. An accompanying interface which mirrors the service is defined in `lib/services/foo.go`.
-Continuing on with the example above, the backend service for the `Foo` resource might look like the following.
+Continuing on with the example above, the sections below show how the backend service for the `Foo` resource might look like.
 
-The sections below contain a reference example for how to interact with the backend to perform common operations on a
+The sections also contain a reference example for how to interact with the backend to perform common operations on a
 resource. For most cases, when adding a new resource, it is preferred to create a service that wraps
 the [generic.Service](https://github.com/gravitational/teleport/blob/7f3c58df1fd675a813dc2992c10b2796b9b5c6bf/lib/services/local/generic/generic.go#L73-L81)
 over implementing everything from scratch. If custom behavior is required for a subset of backend operations, they may
@@ -511,8 +506,8 @@ accessed infrequently, or which scale linearly with cluster size are good exampl
 cached.
 
 If a resource is to be cached, it must be added to
-the[Auth cache](https://github.com/gravitational/teleport/blob/004d0db0c1f6e9b312d0b0e1330b6e5bf1ffef6e/lib/cache/cache.go#L95-L154)
-and the cache of any service that requires it. To add the `Foo` resource to the cached its executor would look similar
+the [Auth cache](https://github.com/gravitational/teleport/blob/004d0db0c1f6e9b312d0b0e1330b6e5bf1ffef6e/lib/cache/cache.go#L95-L154)
+and the cache of any service that requires it. To add the `Foo` resource to the cache its executor would look similar
 to the following:
 
 ```go
@@ -573,7 +568,7 @@ another. Typically resources are retrieved from an existing cluster
 via `tctl get all --with-secrets > /some/path/to/resources/yaml` and then spawning a new instance of with the bootstrap
 flag: `teleport start --bootstrap=/some/path/to/resources/yaml`.
 
-For a resource to be supported it added to the list of items retrieved with `tctl get all` and to the auth
+For a resource to be supported it must be added to the list of items retrieved with `tctl get all` and to the auth
 initialization code responsible for parsing resources during
 the [bootstrap process](https://github.com/gravitational/teleport/blob/d0f2b4406bfacc895f796b665d07c5d740280e38/lib/auth/init.go#L321-L335).
 
@@ -650,7 +645,7 @@ service FooService {
   // UpdateFoo updates an existing Foo resource.
   rpc UpdateFoo(UpdateFooRequest) returns (UpdateFooResponse);
 
-  // UpsertFoo creates or updates a Foo resource.
+  // UpsertFoo creates or replaces a Foo resource.
   rpc UpsertFoo(UpsertFooRequest) returns (UpsertFooResponse);
 
   // DeleteFoo hard deletes the specified Foo resource.
