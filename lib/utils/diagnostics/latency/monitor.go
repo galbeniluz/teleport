@@ -233,7 +233,7 @@ type SSHClient interface {
 	SendRequest(ctx context.Context, name string, wantReply bool, payload []byte) (bool, []byte, error)
 }
 
-// SSHPinger is a [Pinger] implementation that measure latency of an
+// SSHPinger is a [Pinger] implementation that measures the latency of an
 // SSH connection. To calculate round trip time, a keepalive@openssh.com request
 // is sent.
 type SSHPinger struct {
@@ -260,7 +260,7 @@ func NewSSHPinger(clock clockwork.Clock, clt SSHClient) (*SSHPinger, error) {
 // Ping sends a keepalive@openssh.com request via the provided [SSHClient].
 func (s *SSHPinger) Ping(ctx context.Context) error {
 	_, _, err := s.clt.SendRequest(ctx, teleport.KeepAliveReqType, true, nil)
-	return trace.Wrap(err, "sending request keepalive@openssh.com")
+	return trace.Wrap(err, "sending request %s", teleport.KeepAliveReqType)
 }
 
 // WebSocket is the subset of [websocket.Conn] required by the [WebSocketPinger].
@@ -312,8 +312,9 @@ func NewWebsocketPinger(clock clockwork.Clock, ws WebSocket) (*WebSocketPinger, 
 }
 
 // Ping writes a ping control message and waits for the corresponding pong control message
-// to be received before returning. The random payload of the ping message is expected to
-// be echoed back in the pong message since it is used to determine if the pong association.
+// to be received before returning. The random identifier in the ping message is expected
+// to be returned in the pong payload so that we can determine the true round trip time for
+// a ping/pong message pair.
 func (s *WebSocketPinger) Ping(ctx context.Context) error {
 	// websocketPingMessage denotes a ping control message.
 	const websocketPingMessage = 9
@@ -327,11 +328,9 @@ func (s *WebSocketPinger) Ping(ctx context.Context) error {
 	for {
 		select {
 		case pong := <-s.pongC:
-			if pong != payload {
-				continue
+			if pong == payload {
+				return nil
 			}
-
-			return nil
 		case <-ctx.Done():
 			return trace.Wrap(ctx.Err())
 		}

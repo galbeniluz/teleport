@@ -706,6 +706,36 @@ func (t *sshBaseHandler) connectToHost(ctx context.Context, ws WSConn, tc *clien
 	}
 }
 
+func monitorSessionLatency(ctx context.Context, clock clockwork.Clock, stream *WSStream, sshClient *tracessh.Client) error {
+	wsPinger, err := latency.NewWebsocketPinger(clock, stream.ws)
+	if err != nil {
+		return trace.Wrap(err, "creating websocket pinger")
+	}
+
+	sshPinger, err := latency.NewSSHPinger(clock, sshClient)
+	if err != nil {
+		return trace.Wrap(err, "creating ssh pinger")
+	}
+
+	monitor, err := latency.NewMonitor(latency.MonitorConfig{
+		ClientPinger: wsPinger,
+		ServerPinger: sshPinger,
+		Reporter: latency.ReporterFunc(func(ctx context.Context, statistics latency.Statistics) error {
+			return trace.Wrap(stream.writeLatency(SSHSessionLatencyStats{
+				WebSocket: statistics.Client,
+				SSH:       statistics.Server,
+			}))
+		}),
+		Clock: clock,
+	})
+	if err != nil {
+		return trace.Wrap(err, "creating latency monitor")
+	}
+
+	monitor.Run(ctx)
+	return nil
+}
+
 // streamTerminal opens a SSH connection to the remote host and streams
 // events back to the web client.
 func (t *TerminalHandler) streamTerminal(ctx context.Context, tc *client.TeleportClient) {
@@ -733,39 +763,13 @@ func (t *TerminalHandler) streamTerminal(ctx context.Context, tc *client.Telepor
 		}
 	}
 
-	wsPinger, err := latency.NewWebsocketPinger(t.clock, t.stream.ws)
-	if err != nil {
-		t.log.WithError(err).Info("Failed creating websocket pinger")
-		t.stream.writeError(err.Error())
-		return
-	}
-
-	sshPinger, err := latency.NewSSHPinger(t.clock, nc.Client)
-	if err != nil {
-		t.log.WithError(err).Info("Failed creating ssh pinger")
-		t.stream.writeError(err.Error())
-		return
-	}
-
-	monitor, err := latency.NewMonitor(latency.MonitorConfig{
-		ClientPinger: wsPinger,
-		ServerPinger: sshPinger,
-		Reporter: latency.ReporterFunc(func(ctx context.Context, statistics latency.Statistics) error {
-			return trace.Wrap(t.stream.writeLatency(SSHSessionLatencyStats{
-				WebSocket: statistics.Client,
-				SSH:       statistics.Server,
-			}))
-		}),
-		Clock: t.clock,
-	})
-	if err != nil {
-		t.log.WithError(err).Warn("Unable to stream terminal - failure creating connection monitor")
-		t.stream.writeError(err.Error())
-		return
-	}
 	monitorCtx, monitorCancel := context.WithCancel(ctx)
 	defer monitorCancel()
-	go monitor.Run(monitorCtx)
+	go func() {
+		if err := monitorSessionLatency(monitorCtx, t.clock, t.stream.WSStream, nc.Client); err != nil {
+			t.log.WithError(err).Warn("failure monitoring session latency")
+		}
+	}()
 
 	// Establish SSH connection to the server. This function will block until
 	// either an error occurs or it completes successfully.
