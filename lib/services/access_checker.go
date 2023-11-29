@@ -881,7 +881,7 @@ func (a *accessChecker) HostUsers(s types.Server) (*HostUsersInfo, error) {
 		if createHostUserMode == types.CreateHostUserMode_HOST_USER_MODE_UNSPECIFIED {
 			createHostUserMode = types.CreateHostUserMode_HOST_USER_MODE_OFF
 			if createHostUser != nil && createHostUser.Value {
-				createHostUserMode = types.CreateHostUserMode_HOST_USER_MODE_DROP
+				createHostUserMode = types.CreateHostUserMode_HOST_USER_MODE_INSECURE_DROP
 			}
 		}
 
@@ -895,7 +895,8 @@ func (a *accessChecker) HostUsers(s types.Server) (*HostUsersInfo, error) {
 			mode = createHostUserMode
 		}
 		// prefer to use HostUserModeKeep over Drop if mode has already been set.
-		if mode == types.CreateHostUserMode_HOST_USER_MODE_DROP && createHostUserMode == types.CreateHostUserMode_HOST_USER_MODE_KEEP {
+		if (mode == types.CreateHostUserMode_HOST_USER_MODE_DROP || mode == types.CreateHostUserMode_HOST_USER_MODE_INSECURE_DROP) &&
+			createHostUserMode == types.CreateHostUserMode_HOST_USER_MODE_KEEP {
 			mode = types.CreateHostUserMode_HOST_USER_MODE_KEEP
 		}
 
