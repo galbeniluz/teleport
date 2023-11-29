@@ -548,7 +548,7 @@ https://cloud.google.com/solutions/connecting-securely#storing_host_keys_by_enab
 		},
 		HostKeyCallback: callback,
 	}
-	addr := net.JoinHostPort(instance.externalIPAddress, req.SSHPort)
+	addr := net.JoinHostPort(ipAddress, req.SSHPort)
 
 	out, err := sshutils.RunSSH(ctx, addr, req.Script, config, sshutils.WithDialer(req.dialContext))
 	if err != nil {
