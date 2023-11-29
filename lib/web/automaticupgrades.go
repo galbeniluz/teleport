@@ -19,8 +19,8 @@ import (
 const defaultChannelTimeout = 5 * time.Second
 
 func (h *Handler) automaticUpgrades(w http.ResponseWriter, r *http.Request, p httprouter.Params) (interface{}, error) {
-	if !h.ClusterFeatures.AutomaticUpgrades {
-		return nil, trace.AccessDenied("Automatic updates not enabled for the cluster.")
+	if h.cfg.AutomaticUpgradesChannels == nil {
+		return nil, trace.AccessDenied("This proxy is not configured to server automatic upgrades channels.")
 	}
 
 	channelAndType := p.ByName("request")
