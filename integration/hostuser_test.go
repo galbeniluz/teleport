@@ -215,10 +215,12 @@ func TestRootHostUsers(t *testing.T) {
 		require.NoError(t, err)
 		requireUserInGroups(t, u, testGroups)
 		require.NotEmpty(t, u.HomeDir)
+		require.DirExists(t, u.HomeDir)
 
 		require.NoError(t, closer.Close())
 		_, err = user.Lookup(testuser)
 		require.Equal(t, err, user.UnknownUserError(testuser))
+		require.NoDirExists(t, u.HomeDir)
 	})
 
 	t.Run("test create temporary user without home dir", func(t *testing.T) {

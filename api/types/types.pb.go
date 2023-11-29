@@ -302,7 +302,9 @@ const (
 	// HOST_USER_MODE_DROP enables host user creation and deletes users at session end.
 	CreateHostUserMode_HOST_USER_MODE_DROP CreateHostUserMode = 2
 	// HOST_USER_MODE_KEEP enables host user creation and leaves users behind at session end.
-	CreateHostUserMode_HOST_USER_MODE_KEEP          CreateHostUserMode = 3
+	CreateHostUserMode_HOST_USER_MODE_KEEP CreateHostUserMode = 3
+	// HOST_USER_MODE_INSECURE enables host user creation without a home directory and deletes
+	// users at session end.
 	CreateHostUserMode_HOST_USER_MODE_INSECURE_DROP CreateHostUserMode = 4
 )
 
