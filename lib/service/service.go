@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -58,6 +57,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
+	"log/slog"
 
 	"github.com/gravitational/teleport"
 	"github.com/gravitational/teleport/api/client"
@@ -4042,11 +4042,12 @@ func (process *TeleportProcess) initProxyEndpoint(conn *Connector) error {
 				ctx, err := controller(ctx, sctx, login, localAddr, remoteAddr)
 				return ctx, trace.Wrap(err)
 			}),
-			PROXYSigner:     proxySigner,
-			OpenAIConfig:    cfg.Testing.OpenAIConfig,
-			NodeWatcher:     nodeWatcher,
-			AccessGraphAddr: accessGraphAddr,
-			TracerProvider:  process.TracingProvider,
+			PROXYSigner:               proxySigner,
+			OpenAIConfig:              cfg.Testing.OpenAIConfig,
+			NodeWatcher:               nodeWatcher,
+			AccessGraphAddr:           accessGraphAddr,
+			TracerProvider:            process.TracingProvider,
+			AutomaticUpgradesChannels: cfg.Proxy.AutomaticUpgradesChannels,
 		}
 		webHandler, err := web.NewHandler(webConfig)
 		if err != nil {

@@ -291,6 +291,8 @@ type Config struct {
 
 	// AccessGraphAddr is the address of the Access Graph service GRPC API
 	AccessGraphAddr utils.NetAddr
+
+	AutomaticUpgradesChannels automaticupgrades.Channels
 }
 
 // SetDefaults ensures proper default values are set if
@@ -891,6 +893,10 @@ func (h *Handler) bindDefaultEndpoints() {
 	// Returns logins included in the Connect My Computer role of the user.
 	// Returns an empty list of logins if the user does not have a Connect My Computer role assigned.
 	h.GET("/webapi/connectmycomputer/logins", h.WithAuth(h.connectMyComputerLoginsList))
+
+	// Implements the agent version server.
+	// Channel can contain "/", hence the use of a catch-all parameter
+	h.GET("/webapi/automaticupgrades/*request", h.WithUnauthenticatedHighLimiter(h.automaticUpgrades))
 }
 
 // GetProxyClient returns authenticated auth server client

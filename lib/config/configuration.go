@@ -24,8 +24,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"io"
-	"log/slog"
-	"maps"
 	"net"
 	"net/url"
 	"os"
@@ -43,6 +41,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 	kyaml "k8s.io/apimachinery/pkg/util/yaml"
+	"log/slog"
+	"maps"
 
 	"github.com/gravitational/teleport"
 	"github.com/gravitational/teleport/api/client/webclient"
@@ -1107,6 +1107,14 @@ func applyProxyConfig(fc *FileConfig, cfg *servicecfg.Config) error {
 
 	if fc.Proxy.MySQLServerVersion != "" {
 		cfg.Proxy.MySQLServerVersion = fc.Proxy.MySQLServerVersion
+	}
+
+	if fc.Proxy.AutomaticUpgradesChannels != nil {
+		cfg.Proxy.AutomaticUpgradesChannels = fc.Proxy.AutomaticUpgradesChannels
+		err = cfg.Proxy.AutomaticUpgradesChannels.CheckAndSetDefaults()
+		if err != nil {
+			return trace.Wrap(err, "failed to set up automatic update channels")
+		}
 	}
 
 	// This is the legacy format. Continue to support it forever, but ideally
