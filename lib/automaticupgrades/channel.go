@@ -10,8 +10,6 @@ import (
 	"github.com/gravitational/teleport/integrations/kube-agent-updater/pkg/version"
 )
 
-const NoUpdate = "none"
-
 type Channels map[string]*Channel
 
 func (c Channels) CheckAndSetDefaults() error {
