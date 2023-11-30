@@ -600,6 +600,21 @@ message SecurityReportGetResultEvent {
   int32 days = 2;
 }
 
+// DiscoveryFetchEvent is emitted when a DiscoveryService polls for new resources of a given type
+message DiscoveryFetchEvent {
+  // discovery_group is the discovery_group for the fetcher.
+  string discovery_group = 1;
+
+  // cloud_provider is the cloud provider used to fetch resources
+  // Eg, AWS, Azure, GCP, Kubernetes
+  string cloud_provider = 3;
+
+  // resource_type is the type of resource that this fetch is polling.
+  // It depends on the Cloud Provider (defined above).
+  // Eg, rds, ec2, vm, aks, gce, app
+  string resource_type = 4;
+}
+
 // UsageEventOneOf is a message that can accept a oneof of any supported
 // external usage event.
 message UsageEventOneOf {
@@ -654,6 +669,7 @@ message UsageEventOneOf {
     UIDiscoverCreateNodeEvent ui_discover_create_node = 49;
     TAGExecuteQueryEvent tag_execute_query = 50;
     SecurityReportGetResultEvent security_report_get_result = 51;
+    DiscoveryFetchEvent discovery_fetch_event = 52;
   }
   reserved 2; //UIOnboardGetStartedClickEvent
   reserved "ui_onboard_get_started_click";

@@ -2362,6 +2362,35 @@ export namespace AuditQueryRunEvent {
     }
 }
 
+export class DiscoveryFetchEvent extends jspb.Message { 
+    getDiscoveryGroup(): string;
+    setDiscoveryGroup(value: string): DiscoveryFetchEvent;
+
+    getCloudProvider(): string;
+    setCloudProvider(value: string): DiscoveryFetchEvent;
+
+    getResourceType(): string;
+    setResourceType(value: string): DiscoveryFetchEvent;
+
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): DiscoveryFetchEvent.AsObject;
+    static toObject(includeInstance: boolean, msg: DiscoveryFetchEvent): DiscoveryFetchEvent.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: DiscoveryFetchEvent, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): DiscoveryFetchEvent;
+    static deserializeBinaryFromReader(message: DiscoveryFetchEvent, reader: jspb.BinaryReader): DiscoveryFetchEvent;
+}
+
+export namespace DiscoveryFetchEvent {
+    export type AsObject = {
+        discoveryGroup: string,
+        cloudProvider: string,
+        resourceType: string,
+    }
+}
+
 export class SubmitEventRequest extends jspb.Message { 
     getClusterName(): string;
     setClusterName(value: string): SubmitEventRequest;
@@ -2793,6 +2822,12 @@ export class SubmitEventRequest extends jspb.Message {
     setAuditQueryRun(value?: AuditQueryRunEvent): SubmitEventRequest;
 
 
+    hasDiscoveryFetchEvent(): boolean;
+    clearDiscoveryFetchEvent(): void;
+    getDiscoveryFetchEvent(): DiscoveryFetchEvent | undefined;
+    setDiscoveryFetchEvent(value?: DiscoveryFetchEvent): SubmitEventRequest;
+
+
     getEventCase(): SubmitEventRequest.EventCase;
 
     serializeBinary(): Uint8Array;
@@ -2879,6 +2914,7 @@ export namespace SubmitEventRequest {
         externalAuditStorageAuthenticate?: ExternalAuditStorageAuthenticateEvent.AsObject,
         securityReportGetResult?: SecurityReportGetResultEvent.AsObject,
         auditQueryRun?: AuditQueryRunEvent.AsObject,
+        discoveryFetchEvent?: DiscoveryFetchEvent.AsObject,
     }
 
     export enum EventCase {
@@ -3023,6 +3059,8 @@ export namespace SubmitEventRequest {
     SECURITY_REPORT_GET_RESULT = 72,
 
     AUDIT_QUERY_RUN = 73,
+
+    DISCOVERY_FETCH_EVENT = 74,
 
     }
 
