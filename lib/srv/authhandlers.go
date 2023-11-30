@@ -38,6 +38,7 @@ import (
 	apisshutils "github.com/gravitational/teleport/api/utils/sshutils"
 	"github.com/gravitational/teleport/lib/auditd"
 	"github.com/gravitational/teleport/lib/auth"
+	"github.com/gravitational/teleport/lib/connectmycomputer"
 	dtauthz "github.com/gravitational/teleport/lib/devicetrust/authz"
 	"github.com/gravitational/teleport/lib/events"
 	"github.com/gravitational/teleport/lib/observability/metrics"
@@ -325,12 +326,25 @@ func (h *AuthHandlers) UserKeyAuth(conn ssh.ConnMetadata, key ssh.PublicKey) (*s
 	// only failed attempts are logged right now
 	recordFailedLogin := func(err error) {
 		failedLoginCount.Inc()
+		_, isConnectMyComputerNode := h.c.Server.GetInfo().GetLabel(types.ConnectMyComputerNodeOwnerLabel)
 
 		message := fmt.Sprintf("Principal %q is not allowed by this certificate. Ensure your roles grants access by adding it to the 'login' property.", conn.User())
+		if isConnectMyComputerNode {
+			connectMyComputerRoleName := connectmycomputer.GetRoleNameForUser(teleportUser)
+
+			message = fmt.Sprintf("Principal %q is not allowed by this certificate. Ensure that the role %s includes %q in the 'login' property and that no other role denies you this login specifically. ",
+				conn.User(), connectMyComputerRoleName, conn.User())
+		}
 		traceType := types.ConnectionDiagnosticTrace_RBAC_PRINCIPAL
 
 		if trace.IsAccessDenied(err) {
 			message = "You are not authorized to access this node. Ensure your role grants access by adding it to the 'node_labels' property."
+			if isConnectMyComputerNode {
+				connectMyComputerRoleName := connectmycomputer.GetRoleNameForUser(teleportUser)
+				message = fmt.Sprintf("You are not authorized to access this node. Ensure that you hold the %s role and that no other role denies you access to nodes labeled with %s: %s.",
+					connectMyComputerRoleName, types.ConnectMyComputerNodeOwnerLabel, teleportUser)
+			}
+
 			traceType = types.ConnectionDiagnosticTrace_RBAC_NODE
 		}
 
