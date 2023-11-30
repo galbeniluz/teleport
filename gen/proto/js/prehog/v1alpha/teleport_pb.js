@@ -17302,8 +17302,8 @@ proto.prehog.v1alpha.DiscoveryFetchEvent.prototype.toObject = function(opt_inclu
 proto.prehog.v1alpha.DiscoveryFetchEvent.toObject = function(includeInstance, msg) {
   var f, obj = {
     discoveryGroup: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    cloudProvider: jspb.Message.getFieldWithDefault(msg, 3, ""),
-    resourceType: jspb.Message.getFieldWithDefault(msg, 4, "")
+    cloudProvider: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    resourceType: jspb.Message.getFieldWithDefault(msg, 3, "")
   };
 
   if (includeInstance) {
@@ -17344,11 +17344,11 @@ proto.prehog.v1alpha.DiscoveryFetchEvent.deserializeBinaryFromReader = function(
       var value = /** @type {string} */ (reader.readString());
       msg.setDiscoveryGroup(value);
       break;
-    case 3:
+    case 2:
       var value = /** @type {string} */ (reader.readString());
       msg.setCloudProvider(value);
       break;
-    case 4:
+    case 3:
       var value = /** @type {string} */ (reader.readString());
       msg.setResourceType(value);
       break;
@@ -17391,14 +17391,14 @@ proto.prehog.v1alpha.DiscoveryFetchEvent.serializeBinaryToWriter = function(mess
   f = message.getCloudProvider();
   if (f.length > 0) {
     writer.writeString(
-      3,
+      2,
       f
     );
   }
   f = message.getResourceType();
   if (f.length > 0) {
     writer.writeString(
-      4,
+      3,
       f
     );
   }
@@ -17424,11 +17424,11 @@ proto.prehog.v1alpha.DiscoveryFetchEvent.prototype.setDiscoveryGroup = function(
 
 
 /**
- * optional string cloud_provider = 3;
+ * optional string cloud_provider = 2;
  * @return {string}
  */
 proto.prehog.v1alpha.DiscoveryFetchEvent.prototype.getCloudProvider = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
 };
 
 
@@ -17437,16 +17437,16 @@ proto.prehog.v1alpha.DiscoveryFetchEvent.prototype.getCloudProvider = function()
  * @return {!proto.prehog.v1alpha.DiscoveryFetchEvent} returns this
  */
 proto.prehog.v1alpha.DiscoveryFetchEvent.prototype.setCloudProvider = function(value) {
-  return jspb.Message.setProto3StringField(this, 3, value);
+  return jspb.Message.setProto3StringField(this, 2, value);
 };
 
 
 /**
- * optional string resource_type = 4;
+ * optional string resource_type = 3;
  * @return {string}
  */
 proto.prehog.v1alpha.DiscoveryFetchEvent.prototype.getResourceType = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
 };
 
 
@@ -17455,7 +17455,7 @@ proto.prehog.v1alpha.DiscoveryFetchEvent.prototype.getResourceType = function() 
  * @return {!proto.prehog.v1alpha.DiscoveryFetchEvent} returns this
  */
 proto.prehog.v1alpha.DiscoveryFetchEvent.prototype.setResourceType = function(value) {
-  return jspb.Message.setProto3StringField(this, 4, value);
+  return jspb.Message.setProto3StringField(this, 3, value);
 };
 
 

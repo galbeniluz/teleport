@@ -607,12 +607,12 @@ message DiscoveryFetchEvent {
 
   // cloud_provider is the cloud provider used to fetch resources
   // Eg, AWS, Azure, GCP, Kubernetes
-  string cloud_provider = 3;
+  string cloud_provider = 2;
 
   // resource_type is the type of resource that this fetch is polling.
   // It depends on the Cloud Provider (defined above).
   // Eg, rds, ec2, vm, aks, gce, app
-  string resource_type = 4;
+  string resource_type = 3;
 }
 
 // UsageEventOneOf is a message that can accept a oneof of any supported
