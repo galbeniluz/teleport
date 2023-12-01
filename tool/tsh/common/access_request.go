@@ -304,6 +304,15 @@ func onRequestReview(cf *CLIConf) error {
 		return trace.BadParameter("must supply exactly one of '--approve' or '--deny'")
 	}
 
+	var parsedAssumeTime *time.Time
+	if cf.AssumeTimeRaw != "" {
+		assumeTime, err := time.Parse(time.RFC3339, cf.AssumeTimeRaw)
+		if err != nil {
+			return trace.BadParameter("parsing assum-time: %v", err)
+		}
+		parsedAssumeTime = &assumeTime
+	}
+
 	var state types.RequestState
 	switch {
 	case cf.Approve:
@@ -320,6 +329,7 @@ func onRequestReview(cf *CLIConf) error {
 				Author:        cf.Username,
 				ProposedState: state,
 				Reason:        cf.ReviewReason,
+				AssumeTime:    parsedAssumeTime,
 			},
 		})
 		return trace.Wrap(err)
@@ -352,6 +362,7 @@ func showRequestTable(cf *CLIConf, reqs []types.AccessRequest) error {
 	table.AddColumn(asciitable.Column{Title: "Created At (UTC)"})
 	table.AddColumn(asciitable.Column{Title: "Request TTL"})
 	table.AddColumn(asciitable.Column{Title: "Session TTL"})
+	table.AddColumn(asciitable.Column{Title: "Assume Time (UTC)"})
 	table.AddColumn(asciitable.Column{Title: "Status"})
 	now := time.Now()
 	for _, req := range reqs {
@@ -362,6 +373,10 @@ func showRequestTable(cf *CLIConf, reqs []types.AccessRequest) error {
 		if err != nil {
 			return trace.Wrap(err)
 		}
+		assumeTime := ""
+		if req.GetAssumeTime() != nil {
+			assumeTime = req.GetAssumeTime().UTC().Format(time.RFC822)
+		}
 		table.AddRow([]string{
 			req.GetName(),
 			req.GetUser(),
@@ -370,6 +385,7 @@ func showRequestTable(cf *CLIConf, reqs []types.AccessRequest) error {
 			req.GetCreationTime().UTC().Format(time.RFC822),
 			time.Until(req.Expiry()).Round(time.Minute).String(),
 			time.Until(req.GetAccessExpiry()).Round(time.Minute).String(),
+			assumeTime,
 			req.GetState().String(),
 		})
 	}

@@ -58,6 +58,8 @@ type AccessRequestCommand struct {
 	force  bool
 
 	approve, deny bool
+	// assumeTimeRaw format is RFC3339
+	assumeTimeRaw string
 
 	requestList    *kingpin.CmdClause
 	requestGet     *kingpin.CmdClause
@@ -87,6 +89,7 @@ func (c *AccessRequestCommand) Initialize(app *kingpin.Application, config *serv
 	c.requestApprove.Flag("reason", "Optional reason message").StringVar(&c.reason)
 	c.requestApprove.Flag("annotations", "Resolution attributes <key>=<val>[,...]").StringVar(&c.annotations)
 	c.requestApprove.Flag("roles", "Override requested roles <role>[,...]").StringVar(&c.roles)
+	c.requestApprove.Flag("assume-time", "Sets time roles can be assumed by requestor (RFC3339)").StringVar(&c.assumeTimeRaw)
 
 	c.requestDeny = requests.Command("deny", "Deny pending access request.")
 	c.requestDeny.Arg("request-id", "ID of target request(s)").Required().StringVar(&c.reqIDs)
@@ -226,6 +229,10 @@ func (c *AccessRequestCommand) Approve(ctx context.Context, client auth.ClientI)
 	if err != nil {
 		return trace.Wrap(err)
 	}
+	assumeTime, err := time.Parse(time.RFC3339, c.assumeTimeRaw)
+	if err != nil {
+		return trace.BadParameter("parsing assume-time: %v", err)
+	}
 	for _, reqID := range strings.Split(c.reqIDs, ",") {
 		if err := client.SetAccessRequestState(ctx, types.AccessRequestUpdate{
 			RequestID:   reqID,
@@ -233,6 +240,7 @@ func (c *AccessRequestCommand) Approve(ctx context.Context, client auth.ClientI)
 			Reason:      c.reason,
 			Annotations: annotations,
 			Roles:       c.splitRoles(),
+			AssumeTime:  &assumeTime,
 		}); err != nil {
 			return trace.Wrap(err)
 		}
