@@ -147,6 +147,10 @@ func (a *eksFetcher) ResourceType() string {
 	return types.KindKubernetesCluster
 }
 
+func (a *eksFetcher) FetcherType() string {
+	return types.AWSMatcherEKS
+}
+
 func (a *eksFetcher) Cloud() string {
 	return types.CloudAWS
 }

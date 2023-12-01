@@ -1060,6 +1060,41 @@ func (s *Server) emitUsageEvents(events map[string]*usageeventsv1.ResourceCreate
 	return nil
 }
 
+func (s *Server) submitFetchersEvent(fetchers []common.Fetcher) {
+	// Some Matcher types have multiple fetchers.
+	// Eg, rds Matcher converts into `rds` and `aurora` Fetchers
+	// The Fetch Event is meant to represent the configured matcher type: rds
+	type fetcherType struct {
+		cloud       string
+		fetcherType string
+	}
+	fetcherTypes := map[fetcherType]struct{}{}
+	for _, f := range fetchers {
+		fetcherKey := fetcherType{cloud: f.Cloud(), fetcherType: f.FetcherType()}
+		fetcherTypes[fetcherKey] = struct{}{}
+	}
+	for f := range fetcherTypes {
+		s.submitFetchEvent(f.cloud, f.fetcherType)
+	}
+}
+
+func (s *Server) submitFetchEvent(cloudProvider, resourceType string) {
+	err := s.AccessPoint.SubmitUsageEvent(s.ctx, &proto.SubmitUsageEventRequest{
+		Event: &usageeventsv1.UsageEventOneOf{
+			Event: &usageeventsv1.UsageEventOneOf_DiscoveryFetchEvent{
+				DiscoveryFetchEvent: &usageeventsv1.DiscoveryFetchEvent{
+					DiscoveryGroup: s.DiscoveryGroup,
+					CloudProvider:  cloudProvider,
+					ResourceType:   resourceType,
+				},
+			},
+		},
+	})
+	if err != nil {
+		s.Log.WithError(err).Debug("Error emitting discovery fetch event.")
+	}
+}
+
 func (s *Server) getAllAWSServerFetchers() []server.Fetcher {
 	allFetchers := make([]server.Fetcher, 0, len(s.staticServerAWSFetchers))
 
@@ -1069,7 +1104,13 @@ func (s *Server) getAllAWSServerFetchers() []server.Fetcher {
 	}
 	s.muDynamicServerAWSFetchers.RUnlock()
 
-	return append(allFetchers, s.staticServerAWSFetchers...)
+	allFetchers = append(allFetchers, s.staticServerAWSFetchers...)
+
+	if len(allFetchers) > 0 {
+		s.submitFetchEvent(types.CloudAWS, types.AWSMatcherEC2)
+	}
+
+	return allFetchers
 }
 
 func (s *Server) getAllAzureServerFetchers() []server.Fetcher {
@@ -1081,7 +1122,13 @@ func (s *Server) getAllAzureServerFetchers() []server.Fetcher {
 	}
 	s.muDynamicServerAzureFetchers.RUnlock()
 
-	return append(allFetchers, s.staticServerAzureFetchers...)
+	allFetchers = append(allFetchers, s.staticServerAzureFetchers...)
+
+	if len(allFetchers) > 0 {
+		s.submitFetchEvent(types.CloudAzure, types.AzureMatcherVM)
+	}
+
+	return allFetchers
 }
 
 func (s *Server) getAllGCPServerFetchers() []server.Fetcher {
@@ -1093,7 +1140,13 @@ func (s *Server) getAllGCPServerFetchers() []server.Fetcher {
 	}
 	s.muDynamicServerGCPFetchers.RUnlock()
 
-	return append(allFetchers, s.staticServerGCPFetchers...)
+	allFetchers = append(allFetchers, s.staticServerGCPFetchers...)
+
+	if len(allFetchers) > 0 {
+		s.submitFetchEvent(types.CloudGCP, types.GCPMatcherCompute)
+	}
+
+	return allFetchers
 }
 
 // Start starts the discovery service.
