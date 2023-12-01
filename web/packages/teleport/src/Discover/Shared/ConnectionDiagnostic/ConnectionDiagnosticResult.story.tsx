@@ -127,7 +127,7 @@ const diagnosisFailed = {
       traceType: 'rbac principal',
       status: 'failed',
       details:
-        'Long explanation why rbac principal check failed. In et vestibulum risus, vitae scelerisque nibh. Morbi sollicitudin nisi at sem iaculis porta. Cras fringilla, nunc a rhoncus convallis, mauris lacus cursus nibh, quis posuere sem sapien vitae turpis. Integer vitae nulla et nulla varius placerat sed quis magna. Nunc rhoncus justo sit amet lorem euismod condimentum.',
+        'Long explanation with line breaks as to why rbac principal check failed.\nThis sentence should start after a line break. Morbi sollicitudin nisi at sem iaculis porta. Cras fringilla, nunc a rhoncus convallis, mauris lacus cursus nibh, quis posuere sem sapien vitae turpis. Integer vitae nulla et nulla varius placerat sed quis magna.\nNunc rhoncus justo sit amet lorem euismod condimentum.',
       error: 'Some extra error log',
     },
     {
