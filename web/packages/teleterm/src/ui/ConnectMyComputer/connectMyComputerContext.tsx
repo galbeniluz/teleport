@@ -299,6 +299,8 @@ export const ConnectMyComputerContextProvider: FC<{
       let hasAccessDeniedError = false;
       try {
         await retryWithRelogin(ctx, rootClusterUri, () =>
+          // TODO: Ignore errors, otherwise if the cluster is down you cannot
+          // remove the agent.
           ctx.connectMyComputerService.removeConnectMyComputerNode(
             rootClusterUri
           )

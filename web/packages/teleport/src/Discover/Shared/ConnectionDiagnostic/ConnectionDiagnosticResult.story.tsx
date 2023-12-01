@@ -126,6 +126,7 @@ const diagnosisFailed = {
     {
       traceType: 'rbac principal',
       status: 'failed',
+      // TODO: Add multiline error.
       details:
         'Long explanation with line breaks as to why rbac principal check failed.\nThis sentence should start after a line break. Morbi sollicitudin nisi at sem iaculis porta. Cras fringilla, nunc a rhoncus convallis, mauris lacus cursus nibh, quis posuere sem sapien vitae turpis. Integer vitae nulla et nulla varius placerat sed quis magna.\nNunc rhoncus justo sit amet lorem euismod condimentum.',
       error: 'Some extra error log',

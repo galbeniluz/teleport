@@ -256,16 +256,19 @@ func (s SSHConnectionTester) handleErrFromSSH(ctx context.Context, connectionDia
 			connectMyComputerRoleName := connectmycomputer.GetRoleNameForUser(currentUser.GetName())
 			// Picking a wrong username is more probable than the role being outdated, hence why we first
 			// address the case where the actual test gets executed in step 2.
-			message = fmt.Sprintf("Invalid user. "+
+			message = "Invalid user."
+			// TODO: Explain that it'll be shown under show details.
+			detailedMessage := fmt.Sprintf(
 				"If this is step 2 of the connection test, you probably picked a login which does not match "+
-				"the system user that is running Teleport Connect with the Connect My Computer agent.\n"+
-				"If this is step 1 of the connection test and the login was picked automatically, "+
-				"it means that the role %q includes only the login %q and %q is not a valid principal for this node. "+
-				"To fix this problem, reload this page, pick Connect My Computer again, then in Teleport Connect "+
-				"remove the Connect My Computer agent and start Connect My Computer setup again.\n"+
-				"Output from the Connect My Computer agent: %v",
+					"the system user that is running Teleport Connect with the Connect My Computer agent.\n"+
+					"If this is step 1 of the connection test and the login was picked automatically, "+
+					"it means that the role %q includes only the login %q and %q is not a valid principal for this node. "+
+					"To fix this problem, reload this page, pick Connect My Computer again, then in Teleport Connect "+
+					"remove the Connect My Computer agent and start Connect My Computer setup again.\n"+
+					"Output from the Connect My Computer agent: %v",
 				connectMyComputerRoleName, sshPrincipal, sshPrincipal, processStdoutString,
 			)
+			sshError = trace.Wrap(sshError, detailedMessage)
 		}
 
 		connDiag, err := s.cfg.UserClient.AppendDiagnosticTrace(ctx, connectionDiagnosticID, types.NewTraceDiagnosticConnection(
