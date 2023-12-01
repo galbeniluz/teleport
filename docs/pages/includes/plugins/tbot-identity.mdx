@@ -9,7 +9,10 @@ credentials to a specified directory on disk. Ensure that this directory can
 be written to by the Linux user that `tbot` runs as, and that it can be read by
 the Linux user that {{ workload }} will run as.
 
-Modify your `tbot` configuration to add an `identity` output:
+Modify your `tbot` configuration to add an `identity` output.
+
+If running `tbot` on a Linux server, use the `directory` output to write
+identity files to the `/opt/machine-id` directory:
 
 ```yaml
 outputs:
@@ -22,10 +25,21 @@ outputs:
     path: /opt/machine-id
 ```
 
-If operating `tbot` as a background service, restart it. If running `tbot` in
-one-shot mode, it must be executed before you attempt to execute the Terraform
-plan later.
+If running `tbot` on Kubernetes, write the identity file to Kubernetes secret
+instead:
 
-You should now see an `identity` file under `/opt/machine-id`. This contains
-the private key and signed certificates needed by {{ workload }} to
-authenticate with the Teleport Auth Service.
+```yaml
+outputs:
+  - type: identity
+    destination:
+      type: kubernetes_secret
+      name: identity-output
+```
+
+If operating `tbot` as a background service, restart it. If running `tbot` in
+one-shot mode, execute it now.
+
+You should now see an `identity` file under `/opt/machine-id` or a Kubernetes
+secret named `identity-output`. This contains the private key and signed
+certificates needed by {{ workload }} to authenticate with the Teleport Auth
+Service.
