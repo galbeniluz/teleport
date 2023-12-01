@@ -23,25 +23,79 @@ import { TeleportGearIcon } from 'design/SVGIcon';
 
 import { MenuIcon } from 'shared/components/MenuAction';
 
-function colorForLatency(l: number): string {
-  if (l > 400) {
-    return 'dataVisualisation.tertiary.abbey';
+export const warnThreshold = 150;
+export const errorThreshold = 400;
+
+export enum latencyColor {
+  ok = 'dataVisualisation.tertiary.caribbean',
+  warn = 'dataVisualisation.tertiary.abbey',
+  error = 'dataVisualisation.tertiary.sunflower',
+}
+
+// latencyColors determines the color to use for each leg of the connection
+// and the total measurement. The total color is derived from each leg of
+// the connection instead of the combined latency to prevent two latencies
+// in the same threshold from causing the total to jump into the next threshold.
+// For example, this prevents showing a warning if both legs of the connection are ok,
+// but their sum would result in exceeding the warning threshold.
+export function latencyColors(
+  client: number,
+  server: number
+): { client: latencyColor; server: latencyColor; total: latencyColor } {
+  function colorForLatency(l: number): latencyColor {
+    if (l >= errorThreshold) {
+      return latencyColor.error;
+    }
+
+    if (l >= warnThreshold) {
+      return latencyColor.warn;
+    }
+
+    return latencyColor.ok;
   }
 
-  if (l > 150) {
-    return 'dataVisualisation.tertiary.sunflower';
+  const clientColor = colorForLatency(client);
+  const serverColor = colorForLatency(server);
+
+  // any + red = red
+  if (client >= errorThreshold || server >= errorThreshold) {
+    return {
+      client: clientColor,
+      server: serverColor,
+      total: latencyColor.error,
+    };
   }
 
-  return 'dataVisualisation.tertiary.caribbean';
+  // yellow + yellow = yellow
+  if (client >= warnThreshold && server >= warnThreshold) {
+    return {
+      client: clientColor,
+      server: serverColor,
+      total: latencyColor.warn,
+    };
+  }
+
+  // green + yellow = yellow
+  if (
+    (client >= warnThreshold || server >= warnThreshold) &&
+    (client < warnThreshold || server < warnThreshold)
+  ) {
+    return {
+      client: clientColor,
+      server: serverColor,
+      total: latencyColor.warn,
+    };
+  }
+
+  // green + green = green
+  return { client: clientColor, server: serverColor, total: latencyColor.ok };
 }
 
 export function LatencyDiagnostic({ latency }: LatencyDiagnosticProps) {
-  const totalColor = colorForLatency(latency.total);
-  const clientColor = colorForLatency(latency.client);
-  const serverColor = colorForLatency(latency.server);
+  const colors = latencyColors(latency.client, latency.server);
 
   return (
-    <MenuIcon Icon={Icons.Wifi} buttonIconProps={{ color: totalColor }}>
+    <MenuIcon Icon={Icons.Wifi} buttonIconProps={{ color: colors.total }}>
       <Container>
         <Flex gap={5} flexDirection="column">
           <Text textAlign="left" typography="h3">
@@ -49,44 +103,142 @@ export function LatencyDiagnostic({ latency }: LatencyDiagnosticProps) {
           </Text>
 
           <Flex alignItems="center">
-            <Flex gap={1} width="24px" flexDirection="column" alignItems="flex-start"  css={`flex-grow: 0`}>
+            <Flex
+              gap={1}
+              width="24px"
+              flexDirection="column"
+              alignItems="flex-start"
+              css={`
+                flex-grow: 0;
+              `}
+            >
               <Icons.User />
               <Text>You</Text>
             </Flex>
 
-            <Flex gap={1} flexDirection="column" alignItems="center" css={`flex-grow: 1; position: relative;`}>
-              <Flex gap={1} flexDirection="row" alignItems="center"  width="100%"   css={`padding: 0 16px`}>
-                <Icons.ChevronLeft size="small" color="text.muted" css={`left: 8px; position: absolute`}/>
+            <Flex
+              gap={1}
+              flexDirection="column"
+              alignItems="center"
+              css={`
+                flex-grow: 1;
+                position: relative;
+              `}
+            >
+              <Flex
+                gap={1}
+                flexDirection="row"
+                alignItems="center"
+                width="100%"
+                css={`
+                  padding: 0 16px;
+                `}
+              >
+                <Icons.ChevronLeft
+                  size="small"
+                  color="text.muted"
+                  css={`
+                    left: 8px;
+                    position: absolute;
+                  `}
+                />
                 <Line />
-                <Icons.ChevronRight size="small" color="text.muted" css={`right: 8px; position: absolute`}/>
+                <Icons.ChevronRight
+                  size="small"
+                  color="text.muted"
+                  css={`
+                    right: 8px;
+                    position: absolute;
+                  `}
+                />
               </Flex>
-              <Text color={clientColor}>{latency.client}ms</Text>
+              <Text color={colors.client}>{latency.client}ms</Text>
             </Flex>
 
-            <Flex gap={1} width="24px" flexDirection="column" alignItems="center"  css={`flex-grow: 0`}>
+            <Flex
+              gap={1}
+              width="24px"
+              flexDirection="column"
+              alignItems="center"
+              css={`
+                flex-grow: 0;
+              `}
+            >
               <TeleportGearIcon size={24}></TeleportGearIcon>
               <Text>Teleport</Text>
             </Flex>
 
-            <Flex gap={1} flexDirection="column" alignItems="center"  css={`flex-grow: 1; position: relative;`}>
-              <Flex gap={1} flexDirection="row" alignItems="center" width="100%"  css={`padding: 0 16px`}>
-                <Icons.ChevronLeft size="small" color="text.muted" css={`left: 8px; position: absolute`}/>
+            <Flex
+              gap={1}
+              flexDirection="column"
+              alignItems="center"
+              css={`
+                flex-grow: 1;
+                position: relative;
+              `}
+            >
+              <Flex
+                gap={1}
+                flexDirection="row"
+                alignItems="center"
+                width="100%"
+                css={`
+                  padding: 0 16px;
+                `}
+              >
+                <Icons.ChevronLeft
+                  size="small"
+                  color="text.muted"
+                  css={`
+                    left: 8px;
+                    position: absolute;
+                  `}
+                />
                 <Line />
-                <Icons.ChevronRight size="small" color="text.muted" css={`right: 8px; position: absolute`}/>
+                <Icons.ChevronRight
+                  size="small"
+                  color="text.muted"
+                  css={`
+                    right: 8px;
+                    position: absolute;
+                  `}
+                />
               </Flex>
-              <Text color={serverColor}>{latency.server}ms</Text>
+              <Text color={colors.server}>{latency.server}ms</Text>
             </Flex>
 
-            <Flex gap={1} width="24px" flexDirection="column" alignItems="flex-end"  css={`flex-grow: 0`}>
+            <Flex
+              gap={1}
+              width="24px"
+              flexDirection="column"
+              alignItems="flex-end"
+              css={`
+                flex-grow: 0;
+              `}
+            >
               <Icons.Server />
               <Text>Server</Text>
             </Flex>
           </Flex>
 
           <Flex flexDirection="column" alignItems="center">
-            <Text bold fontSize={2} textAlign="center" color={totalColor}>
-              Total Latency: {latency.total}ms
-            </Text>
+            <Flex gap={1} flexDirection="row" alignItems="center">
+              {colors.total === latencyColor.error && (
+                <Icons.WarningCircle size={20} color={colors.total} />
+              )}
+
+              {colors.total === latencyColor.warn && (
+                <Icons.Warning size={20} color={colors.total} />
+              )}
+
+              {colors.total === latencyColor.ok && (
+                <Icons.CircleCheck size={20} color={colors.total} />
+              )}
+
+              <Text bold fontSize={2} textAlign="center" color={colors.total}>
+                Total Latency: {latency.total}ms
+              </Text>
+            </Flex>
           </Flex>
         </Flex>
       </Container>
