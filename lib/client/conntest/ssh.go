@@ -244,7 +244,7 @@ func (s SSHConnectionTester) handleErrFromSSH(ctx context.Context, connectionDia
 	// user that is not the same as the user who runs the agent, the emitted error is "Failed to
 	// launch: fork/exec <conn.User shell>: operation not permitted."
 	isForkExecOperationNotPermitted := strings.HasPrefix(processStdoutString, "Failed to launch: fork/exec") &&
-		strings.HasSuffix(processStdoutString, "operation not permitted")
+		strings.Contains(processStdoutString, "operation not permitted")
 	// "operation not permitted" is handled only for the Connect My Computer case as we assume that
 	// regular SSH nodes are started as root and are unlikely to run into this error.
 	isInvalidNodePrincipal := isUsernameLookupFail || (isConnectMyComputerNode && isForkExecOperationNotPermitted)
