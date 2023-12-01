@@ -48,36 +48,36 @@ export function LatencyDiagnostic({ latency }: LatencyDiagnosticProps) {
             Network Connection
           </Text>
 
-          <Flex flexDirection="row" alignItems="center">
-            <Flex mr={2} gap={1} flexDirection="column" alignItems="center">
+          <Flex alignItems="center">
+            <Flex gap={1} width="24px" flexDirection="column" alignItems="flex-start"  css={`flex-grow: 0`}>
               <Icons.User />
               <Text>You</Text>
             </Flex>
 
-            <Flex mr={2} gap={1} flexDirection="column" alignItems="center">
-              <Flex mr={2} gap={1} flexDirection="row" alignItems="center">
-                <Icons.ChevronLeft size="medium" />
+            <Flex gap={1} flexDirection="column" alignItems="center" css={`flex-grow: 1; position: relative;`}>
+              <Flex gap={1} flexDirection="row" alignItems="center"  width="100%"   css={`padding: 0 16px`}>
+                <Icons.ChevronLeft size="small" color="text.muted" css={`left: 8px; position: absolute`}/>
                 <Line />
-                <Icons.ChevronRight size="medium" />
+                <Icons.ChevronRight size="small" color="text.muted" css={`right: 8px; position: absolute`}/>
               </Flex>
               <Text color={clientColor}>{latency.client}ms</Text>
             </Flex>
 
-            <Flex mr={2} gap={1} flexDirection="column" alignItems="center">
+            <Flex gap={1} width="24px" flexDirection="column" alignItems="center"  css={`flex-grow: 0`}>
               <TeleportGearIcon size={24}></TeleportGearIcon>
               <Text>Teleport</Text>
             </Flex>
 
-            <Flex mr={2} gap={1} flexDirection="column" alignItems="center">
-              <Flex mr={2} gap={1} flexDirection="row" alignItems="center">
-                <Icons.ChevronLeft size="medium" />
+            <Flex gap={1} flexDirection="column" alignItems="center"  css={`flex-grow: 1; position: relative;`}>
+              <Flex gap={1} flexDirection="row" alignItems="center" width="100%"  css={`padding: 0 16px`}>
+                <Icons.ChevronLeft size="small" color="text.muted" css={`left: 8px; position: absolute`}/>
                 <Line />
-                <Icons.ChevronRight size="medium" />
+                <Icons.ChevronRight size="small" color="text.muted" css={`right: 8px; position: absolute`}/>
               </Flex>
               <Text color={serverColor}>{latency.server}ms</Text>
             </Flex>
 
-            <Flex mr={2} gap={1} flexDirection="column" alignItems="center">
+            <Flex gap={1} width="24px" flexDirection="column" alignItems="flex-end"  css={`flex-grow: 0`}>
               <Icons.Server />
               <Text>Server</Text>
             </Flex>
@@ -95,15 +95,17 @@ export function LatencyDiagnostic({ latency }: LatencyDiagnosticProps) {
 }
 
 const Container = styled.div`
-  background: ${props => props.theme.colors.levels.surface};
+  background: ${props => props.theme.colors.levels.elevated};
   padding: ${props => props.theme.space[4]}px;
   width: 370px;
   height: 164px;
 `;
 
 const Line = styled.div`
-  border: 1px dashed;
-  width: 55px;
+  color: ${props => props.theme.colors.text.muted};
+  border: 0.5px dashed;
+  min-width: 60px;
+  width: 100%;
 `;
 
 export type LatencyDiagnosticProps = {
