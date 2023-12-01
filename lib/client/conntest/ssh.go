@@ -237,15 +237,35 @@ func (s SSHConnectionTester) handleErrFromSSH(ctx context.Context, connectionDia
 	}
 
 	processStdoutString := strings.TrimSpace(processStdout.String())
-	if strings.HasPrefix(processStdoutString, "Failed to launch: user:") {
+	// If the selected principal does not exist on the node, attempting to connect emits:
+	// "Failed to launch: user: lookup username <principal>: no such file or directory."
+	isUsernameLookupFail := strings.HasPrefix(processStdoutString, "Failed to launch: user:")
+	// Connect My Computer runs the agent as non-root. When attempting to connect as another system
+	// user that is not the same as the user who runs the agent, the emitted error is "Failed to
+	// launch: fork/exec <conn.User shell>: operation not permitted."
+	isForkExecOperationNotPermitted := strings.HasPrefix(processStdoutString, "Failed to launch: fork/exec") &&
+		strings.HasSuffix(processStdoutString, "operation not permitted")
+	// "operation not permitted" is handled only for the Connect My Computer case as we assume that
+	// regular SSH nodes are started as root and are unlikely to run into this error.
+	isInvalidNodePrincipal := isUsernameLookupFail || (isConnectMyComputerNode && isForkExecOperationNotPermitted)
+
+	if isInvalidNodePrincipal {
 		message := fmt.Sprintf("Invalid user. Please ensure the principal %q is a valid Linux login in the target node. Output from Node: %v",
 			sshPrincipal, processStdoutString)
 		if isConnectMyComputerNode {
 			connectMyComputerRoleName := connectmycomputer.GetRoleNameForUser(currentUser.GetName())
-			message = "Invalid user. If there are multiple logins to choose from, pick the login which matches the system user that is running Teleport Connect. " +
-				fmt.Sprintf("If there are no logins to choose from, the role %s includes an outdated login %s. Restart Connect My Computer setup in Teleport Connect to fix this problem. ",
-					connectMyComputerRoleName, sshPrincipal) +
-				fmt.Sprintf("Output from the Connect My Computer agent: %v", processStdoutString)
+			// Picking a wrong username is more probable than the role being outdated, hence why we first
+			// address the case where the actual test gets executed in step 2.
+			message = fmt.Sprintf("Invalid user. "+
+				"If this is step 2 of the connection test, you probably picked a login which does not match "+
+				"the system user that is running Teleport Connect with the Connect My Computer agent. "+
+				"If this is step 1 of the connection test and the login was picked automatically, "+
+				"it means that the role %q includes only the login %q and %q is not a valid principal for this node. "+
+				"To fix this problem, reload this page, pick Connect My Computer again, then in Teleport Connect "+
+				"remove the Connect My Computer agent and start Connect My Computer setup again. "+
+				"Output from the Connect My Computer agent: %v",
+				connectMyComputerRoleName, sshPrincipal, sshPrincipal, processStdoutString,
+			)
 		}
 
 		connDiag, err := s.cfg.UserClient.AppendDiagnosticTrace(ctx, connectionDiagnosticID, types.NewTraceDiagnosticConnection(
