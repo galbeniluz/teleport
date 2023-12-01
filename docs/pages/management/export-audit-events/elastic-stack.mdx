@@ -26,6 +26,11 @@ stores them in Elasticsearch for visualization and alerting in Kibana.
 
   We have tested this guide on the Elastic Stack version 8.4.1.
 
+- **Optional:** You can configure Machine ID to provide short-lived Teleport
+  credentials to the Event Handler. Before following this guide, follow a
+  Machine ID [deployment guide](../../machine-id/deployment.mdx) to run the
+  `tbot` binary on your infrastructure.
+
 ## Step 1/4. Set up the Event Handler plugin
 
 The Event Handler plugin is a binary that runs independently of your Teleport

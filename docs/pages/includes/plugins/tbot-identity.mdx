@@ -1,0 +1,31 @@
+{{ workload="the plugin" }}
+
+Configure `tbot` with an output that will produce the credentials needed by {{
+workload }}. As {{ workload }} will be accessing the Teleport API, the correct
+output type to use is `identity`.
+
+For this guide, the `directory` destination will be used. This will write these
+credentials to a specified directory on disk. Ensure that this directory can
+be written to by the Linux user that `tbot` runs as, and that it can be read by
+the Linux user that {{ workload }} will run as.
+
+Modify your `tbot` configuration to add an `identity` output:
+
+```yaml
+outputs:
+- type: identity
+  destination:
+    type: directory
+    # For this guide, /opt/machine-id is used as the destination directory.
+    # You may wish to customize this. Multiple outputs cannot share the same
+    # destination.
+    path: /opt/machine-id
+```
+
+If operating `tbot` as a background service, restart it. If running `tbot` in
+one-shot mode, it must be executed before you attempt to execute the Terraform
+plan later.
+
+You should now see an `identity` file under `/opt/machine-id`. This contains
+the private key and signed certificates needed by {{ workload }} to
+authenticate with the Teleport Auth Service.
