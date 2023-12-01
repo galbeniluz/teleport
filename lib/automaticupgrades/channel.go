@@ -24,6 +24,7 @@ import (
 	"github.com/gravitational/teleport/integrations/kube-agent-updater/pkg/version"
 )
 
+// Channels is a map of Channel objects.
 type Channels map[string]*Channel
 
 func (c Channels) CheckAndSetDefaults() error {
@@ -38,6 +39,9 @@ func (c Channels) CheckAndSetDefaults() error {
 	return trace.NewAggregate(errs...)
 }
 
+// Channel describes an automatic update channel configuration.
+// It can be configured to serve a static version, or forward version requests
+// to an upstream version server. Forwarded results are cached for 1 minute.
 type Channel struct {
 	ForwardURL      string `yaml:"forward_url,omitempty"`
 	StaticVersion   string `yaml:"static_version,omitempty"`
