@@ -116,7 +116,19 @@ $ tctl create teleport-event-handler-impersonator.yaml
 
 ### Export the access plugin identity
 
+Give the plugin access to a Teleport identity file. We recommend using Machine
+ID for this in order to produce short-lived identity files that are less
+susceptible to exfiltration, though in demo deployments, you can generate
+longer-lived identity files with `tctl`:
+
+<Tabs>
+<TabItem label="Machine ID">
+(!docs/pages/includes/plugins/tbot-identity.mdx!)
+</TabItem>
+<TabItem label="Long-lived identity files">
 (!docs/pages/includes/plugins/identity-export.mdx user="teleport-event-handler"!)
+</TabItem>
+<Tabs>
 
 ## Step 2/4. Configure a Logstash pipeline
 
